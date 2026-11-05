@@ -1,0 +1,16 @@
+# winlight/.codex/config.toml
+
+# Default session behavior. Custom agents inherit these unless their own TOML overrides them.
+# The model is intentionally not pinned, so Codex uses whatever your app session is set to.
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[agents]
+# Three roles (coder, designer, optimizer) -> at most 3 concurrent subagents.
+max_threads = 3
+# Subagents cannot spawn their own subagents; keeps cost and coordination predictable.
+max_depth = 1
+
+# Optional: raise the AGENTS.md size limit if you extend it a lot.
+# project_doc_max_bytes = 65536
