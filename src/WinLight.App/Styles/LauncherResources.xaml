@@ -39,12 +39,9 @@
                     HorizontalAlignment="Left" VerticalAlignment="Center"
                     CornerRadius="2" Visibility="Collapsed"
                     Background="{ThemeResource AccentFillColorDefaultBrush}" />
-            <Grid Grid.Column="1" Width="32" Height="32" VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE71D;" FontFamily="Segoe Fluent Icons"
-                          FontSize="24" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <Image Source="{Binding Icon}" Width="32" Height="32"
-                       Stretch="Uniform" AutomationProperties.AccessibilityView="Raw" />
-            </Grid>
+            <Image Grid.Column="1" Source="{Binding Icon}" Width="32" Height="32"
+                   VerticalAlignment="Center" Stretch="Uniform"
+                   AutomationProperties.AccessibilityView="Raw" />
             <TextBlock Grid.Column="3" Text="{Binding Name}"
                        Style="{ThemeResource BodyTextBlockStyle}"
                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"

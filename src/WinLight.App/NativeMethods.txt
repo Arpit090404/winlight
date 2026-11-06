@@ -20,3 +20,6 @@ ShellExecuteExW
 SHCreateItemFromParsingName
 IShellItemImageFactory
 DeleteObject
+CreateCompatibleDC
+DeleteDC
+GetDIBits

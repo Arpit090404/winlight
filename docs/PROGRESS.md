@@ -32,3 +32,27 @@
 - Adjusted the search TextBox padding so the placeholder and caret sit at y267, near the 56 px bar center at y268 (previously y255), confirmed in before/after screenshots.
 - Release build had zero warnings; all 12 tests passed, and the running app opened and dismissed with Esc.
 - Next: verify High Contrast and 200% text scaling, then measure latency and memory.
+
+## 2026-11-06 — Transparent shell icons
+- Replaced `Image.FromHbitmap` with a 32-bit pixel copy that retains the shell bitmap's alpha channel before PNG encoding; result rows continue to show icons on the native list surface without an icon tile.
+- Extracted the Antigravity shortcut icon through the new path: 256 transparent pixels and 4 partially transparent pixels in its 32×32 PNG.
+- Release build completed with zero warnings and all 12 tests passed; the PNG extraction path was exercised against a real shortcut.
+- A sandboxed launch exited during WinUI startup with COM error 0x800F1000; launching the rebuilt executable with normal desktop permissions left the resident process running and responding. Next: visually verify several classic and packaged icons, then measure latency and memory.
+
+## 2026-11-06 — Standalone release
+- Published the existing unpackaged, self-contained WinUI app into `publish/WinLight`; the folder contains the runtime and app dependencies and starts via `WinLight.App.exe` without a terminal.
+- Fixed publish to copy `WinLight.App.pri`, which WinUI needs to resolve `LauncherResources.xaml`; the first publish omitted it and stalled during startup.
+- Launched the published executable with normal desktop permissions: the resident process remained responsive, accepted the named-pipe show signal, and registered the published path for login startup.
+- Release build has zero warnings and all 12 tests pass. Next: visually inspect icons and measure latency and idle memory.
+
+## 2026-11-06 — Launcher window ordering
+- Reasserted the native topmost Z order each time the search window appears, before foreground activation.
+- Published and restarted the standalone app; a show signal brought its window to the foreground, and the window's native topmost flag was set.
+- Release build completed with zero warnings and all 12 tests passed.
+- Next: visually inspect icons and measure latency and idle memory.
+
+## 2026-11-06 — Icon placeholder removal
+- Removed the Fluent placeholder glyph layered underneath each shell icon in the result row; transparent icon pixels now show the launcher surface directly.
+- Published and restarted the standalone app; its resident process responded to a show signal.
+- Release build completed with zero warnings and all 12 tests passed.
+- Next: visually inspect classic and packaged icon shapes, then measure latency and idle memory.

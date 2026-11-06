@@ -25,4 +25,9 @@
     <ProjectReference Include="..\WinLight.Core\WinLight.Core.csproj" />
   </ItemGroup>
 
+  <Target Name="CopyAppResourcesToPublish" AfterTargets="Publish"
+          Condition="Exists('$(TargetDir)$(AssemblyName).pri')">
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).pri" DestinationFolder="$(PublishDir)" />
+  </Target>
+
 </Project>

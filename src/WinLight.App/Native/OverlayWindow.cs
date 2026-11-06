@@ -71,6 +71,10 @@ internal static unsafe class OverlayWindow
     public static void BringToForeground(Window window)
     {
         HWND hwnd = new(WinRT.Interop.WindowNative.GetWindowHandle(window));
+        if (!PInvoke.SetWindowPos(hwnd, new HWND(-1), 0, 0, 0, 0,
+                SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE))
+            AppLog.Error("Raise launcher above windows", new Win32Exception(Marshal.GetLastWin32Error()));
+
         HWND foreground = PInvoke.GetForegroundWindow();
         uint processId = 0;
         uint foregroundThread = PInvoke.GetWindowThreadProcessId(foreground, &processId);
