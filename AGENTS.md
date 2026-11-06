@@ -14,6 +14,7 @@ Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `optimize
 - Rank results by match quality plus frecency (frequency and recency of past launches).
 - Keyboard: type to search, Up/Down to move, Enter to launch, Ctrl+Enter to launch as admin, Esc or focus loss to dismiss.
 - Runs resident in the tray, starts at login, single instance.
+- Empty query shows only the search bar; the result list appears only once the user types.
 
 **Out of scope for v1 (do not add unless asked):** file search, web search, calculator, clipboard history, plugins, telemetry, network access, auto-update, cloud anything.
 
