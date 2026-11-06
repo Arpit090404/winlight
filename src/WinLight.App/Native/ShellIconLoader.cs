@@ -15,6 +15,8 @@ namespace WinLight.App.Native;
 internal sealed class ShellIconLoader : IDisposable
 {
     private readonly BlockingCollection<AppResultViewModel> _queue = new();
+    private readonly ConcurrentDictionary<AppResultViewModel, long>? _queuedAt =
+        PerfLog.Enabled ? new ConcurrentDictionary<AppResultViewModel, long>() : null;
     private readonly DispatcherQueue _dispatcher;
     private readonly Thread _worker;
 
@@ -28,6 +30,7 @@ internal sealed class ShellIconLoader : IDisposable
 
     public void Queue(AppResultViewModel result)
     {
+        if (PerfLog.Enabled) _queuedAt!.TryAdd(result, PerfLog.Stamp());
         if (!_queue.IsAddingCompleted) _queue.Add(result);
     }
 
@@ -37,8 +40,10 @@ internal sealed class ShellIconLoader : IDisposable
         {
             try
             {
+                long stamp = 0;
+                if (PerfLog.Enabled) _queuedAt!.TryRemove(result, out stamp);
                 byte[]? png = ExtractPng(result.Item.LaunchPath);
-                if (png is not null) _dispatcher.TryEnqueue(() => _ = SetIconAsync(result, png));
+                if (png is not null) _dispatcher.TryEnqueue(() => _ = SetIconAsync(result, png, stamp));
             }
             catch (Exception error) { AppLog.Error($"Extract icon for {result.Name}", error); }
         }
@@ -101,7 +106,7 @@ internal sealed class ShellIconLoader : IDisposable
         return image;
     }
 
-    private static async Task SetIconAsync(AppResultViewModel result, byte[] png)
+    private static async Task SetIconAsync(AppResultViewModel result, byte[] png, long stamp)
     {
         try
         {
@@ -116,6 +121,7 @@ internal sealed class ShellIconLoader : IDisposable
             var bitmap = new BitmapImage();
             await bitmap.SetSourceAsync(stream);
             result.Icon = bitmap;
+            if (PerfLog.Enabled) PerfLog.Record("icon_cold", stamp, $"name={result.Name}");
         }
         catch (Exception error) { AppLog.Error($"Decode icon for {result.Name}", error); }
     }

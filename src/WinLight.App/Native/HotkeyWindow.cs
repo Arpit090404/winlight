@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -12,12 +13,12 @@ internal sealed unsafe class HotkeyWindow : IDisposable
     private const int HotkeyId = 1;
     private const uint WmHotkey = 0x0312;
     private static HotkeyWindow? s_instance;
-    private readonly Action _toggle;
+    private readonly Action<long> _toggle;
     private HWND _handle;
     private readonly WNDPROC _windowProc;
     private bool _registered;
 
-    public HotkeyWindow(Action toggle)
+    public HotkeyWindow(Action<long> toggle)
     {
         _toggle = toggle;
         s_instance = this;
@@ -51,7 +52,8 @@ internal sealed unsafe class HotkeyWindow : IDisposable
     {
         if (message == WmHotkey && (int)wParam.Value == HotkeyId)
         {
-            s_instance?._toggle();
+            long stamp = PerfLog.Enabled ? Stopwatch.GetTimestamp() : 0;
+            s_instance?._toggle(stamp);
             return default;
         }
         return PInvoke.DefWindowProc(hwnd, message, wParam, lParam);

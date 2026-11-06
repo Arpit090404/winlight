@@ -56,3 +56,9 @@
 - Published and restarted the standalone app; its resident process responded to a show signal.
 - Release build completed with zero warnings and all 12 tests passed.
 - Next: visually inspect classic and packaged icon shapes, then measure latency and idle memory.
+
+## 2026-11-06 — Performance baseline
+- Added `WINLIGHT_PERF=1` instrumentation for hotkey frame, query update, startup/index refresh, and icon cold/cache timings; the default path does not log.
+- Measured the published Release app on the normal desktop: hotkey p95 11.059 ms immediately and 14.653 ms after idle; first usable index 2.169 s.
+- Hidden idle CPU was 0 over 60 s, but working set rose from 198.22 MB at 1 minute to 237.22 MB at 10 minutes; 5,000-item core search was about 0.12 ms in BenchmarkDotNet.
+- Full results and coverage limits are in `docs/PERF.md`; Release build had zero warnings and all 12 tests passed. Next: optimizer read-only analysis before any tuning.

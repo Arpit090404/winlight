@@ -43,7 +43,13 @@ internal sealed class AppIndexer : IDisposable
         }
         var thread = new Thread(() =>
         {
-            try { _updated(Enumerate()); }
+            long stamp = PerfLog.Stamp();
+            try
+            {
+                IReadOnlyList<AppItem> items = Enumerate();
+                if (PerfLog.Enabled) PerfLog.Record("index_refresh", stamp, $"raw_items={items.Count}");
+                _updated(items);
+            }
             catch (Exception error) { AppLog.Error("Enumerate applications", error); }
             finally
             {

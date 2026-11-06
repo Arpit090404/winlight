@@ -1,12 +1,14 @@
 using CommunityToolkit.Mvvm.Input;
 using H.NotifyIcon;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Security;
 using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.Win32;
 using WinLight.App.Native;
 using WinLight.App.ViewModels;
@@ -35,6 +37,7 @@ public sealed partial class App : Application
     private bool _hasIndex;
     private DateTimeOffset _lastIndexed;
     private int _logicalHeight = 56;
+    private long _pendingHotkeyFrame;
 
     partial void ConfigureVisuals(StackPanel root, TextBox input, ListView results,
         TextBlock error, LauncherViewModel viewModel);
@@ -51,7 +54,11 @@ public sealed partial class App : Application
         _icons = new ShellIconLoader(_dispatcher);
         _input = new TextBox { PlaceholderText = "Search apps", Height = 56 };
         _input.KeyDown += OnInputKeyDown;
-        _input.TextChanged += (_, _) => UpdateResults();
+        _input.TextChanged += (_, _) =>
+        {
+            long stamp = PerfLog.Enabled ? Stopwatch.GetTimestamp() : 0;
+            UpdateResults(stamp);
+        };
         _results = new ListView
         {
             DisplayMemberPath = nameof(AppResultViewModel.Name),
@@ -107,7 +114,7 @@ public sealed partial class App : Application
             Show();
         }
 
-        _hotkey = new HotkeyWindow(Toggle);
+        _hotkey = new HotkeyWindow(OnHotkey);
         if (!_hotkey.RegisterAltSpace())
         {
             if (_tray is not null) _tray.ToolTipText = "WinLight — Alt+Space unavailable; click to open";
@@ -132,16 +139,19 @@ public sealed partial class App : Application
         _dispatcher?.TryEnqueue(() =>
         {
             _search.SetItems(items);
+            if (!_hasIndex && _search.Count > 0 && PerfLog.Enabled)
+                PerfLog.RecordStartup("index_usable", $"items={_search.Count}");
             _resultCache.Clear();
             if (DiagnosticLog.Enabled)
                 DiagnosticLog.Write($"Index count after {(_hasIndex ? "refresh" : "startup")}: {_search.Count}");
             _hasIndex = true;
+            if (PerfLog.Enabled) PerfLog.RecordStartup("index_complete", $"items={_search.Count}");
             _lastIndexed = DateTimeOffset.UtcNow;
             UpdateResults();
         });
     }
 
-    private void UpdateResults()
+    private void UpdateResults(long perfStart = 0)
     {
         if (_input is null || _results is null || _window is null) return;
         _viewModel.SetQuery(_input.Text);
@@ -151,12 +161,15 @@ public sealed partial class App : Application
         _visibleResults.Clear();
         foreach (AppItem item in matches)
         {
+            long iconLookup = PerfLog.Stamp();
             if (!_resultCache.TryGetValue(item.LaunchPath, out AppResultViewModel? result))
             {
                 result = new AppResultViewModel(item);
                 _resultCache.Add(item.LaunchPath, result);
                 _icons?.Queue(result);
             }
+            else if (PerfLog.Enabled && result.Icon is not null)
+                PerfLog.Record("icon_cached", iconLookup, $"name={result.Name}");
             _visibleResults.Add(result);
         }
         _results.Visibility = _viewModel.IsResultsVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -169,6 +182,26 @@ public sealed partial class App : Application
             _logicalHeight = logicalHeight;
             OverlayWindow.ResizeHeight(_window, logicalHeight);
         }
+        if (PerfLog.Enabled && perfStart != 0)
+            PerfLog.Record("query_update", perfStart, $"query={_input.Text.Replace('|', ' ')};results={matches.Count};index={_search.Count}");
+    }
+
+    private void OnHotkey(long stamp)
+    {
+        _pendingHotkeyFrame = stamp;
+        Toggle();
+        if (stamp == 0 || !_showing) _pendingHotkeyFrame = 0;
+        else CompositionTarget.Rendering += OnFirstRenderedFrame;
+    }
+
+    private void OnFirstRenderedFrame(object? sender, object args)
+    {
+        if (_pendingHotkeyFrame == 0 || _window?.AppWindow.IsVisible != true ||
+            _input?.FocusState == FocusState.Unfocused) return;
+        CompositionTarget.Rendering -= OnFirstRenderedFrame;
+        long stamp = _pendingHotkeyFrame;
+        _pendingHotkeyFrame = 0;
+        PerfLog.Record("hotkey_first_frame", stamp);
     }
 
     private void Toggle()
@@ -201,6 +234,11 @@ public sealed partial class App : Application
     private void Hide()
     {
         _showing = false;
+        if (_pendingHotkeyFrame != 0)
+        {
+            _pendingHotkeyFrame = 0;
+            CompositionTarget.Rendering -= OnFirstRenderedFrame;
+        }
         _window?.AppWindow.Hide();
     }
 
