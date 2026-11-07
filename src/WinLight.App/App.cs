@@ -31,11 +31,13 @@ public sealed partial class App : Application
     private TextBlock? _error;
     private TaskbarIcon? _tray;
     private HotkeyWindow? _hotkey;
+    private SystemEventWindow? _systemEvents;
     private AppIndexer? _indexer;
     private ShellIconLoader? _icons;
     private DispatcherQueue? _dispatcher;
     private bool _showing;
     private bool _windowActive;
+    private readonly WindowActivationGate _activationGate = new();
     private bool _hasIndex;
     private DateTimeOffset _lastIndexed;
     private int _logicalHeight = 56;
@@ -48,7 +50,19 @@ public sealed partial class App : Application
     public App()
     {
         InitializeComponent();
-        UnhandledException += (_, e) => AppLog.Error("Unhandled UI exception", e.Exception);
+        UnhandledException += (_, e) =>
+        {
+            AppLog.Error("Unhandled UI exception", e.Exception);
+            e.Handled = true;
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            AppLog.Error("Unobserved background task", e.Exception);
+            e.SetObserved();
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            AppLog.Error("Unhandled process exception", e.ExceptionObject as Exception ??
+                new InvalidOperationException(e.ExceptionObject.ToString()));
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -91,8 +105,18 @@ public sealed partial class App : Application
         _window.Activated += (_, e) =>
         {
             _windowActive = e.WindowActivationState != WindowActivationState.Deactivated;
-            if (e.WindowActivationState == WindowActivationState.Deactivated) Hide();
-            else if (_showing) _dispatcher?.TryEnqueue(() => _input?.Focus(FocusState.Programmatic));
+            if (PerfLog.Enabled) PerfLog.Point("overlay_activation",
+                $"state={e.WindowActivationState};showing={_showing};armed={_activationGate.ShouldHideOnDeactivated}");
+            if (e.WindowActivationState == WindowActivationState.Deactivated)
+            {
+                // Showing over another topmost window can emit transient activation
+                // changes before the TextBox is actually ready for input.
+                if (_showing && _activationGate.ShouldHideOnDeactivated) Hide();
+            }
+            else if (_showing)
+            {
+                PostUi(() => _input?.Focus(FocusState.Programmatic));
+            }
         };
         _window.AppWindow.Hide();
 
@@ -103,9 +127,20 @@ public sealed partial class App : Application
             LeftClickCommand = new RelayCommand(Toggle),
             NoLeftClickDelay = true
         };
+        var settingsItem = new MenuFlyoutItem { Text = "Settings" };
+        settingsItem.Command = new RelayCommand(() =>
+        {
+            if (PerfLog.Enabled) PerfLog.Point("tray_settings_command",
+                $"ui_thread={_dispatcher?.HasThreadAccess};thread={Environment.CurrentManagedThreadId}");
+            PostUi(ShowSettings);
+        });
+        var rescanItem = new MenuFlyoutItem { Text = "Rescan apps" };
+        rescanItem.Command = new RelayCommand(() => _indexer?.Refresh());
         var exitItem = new MenuFlyoutItem { Text = "Exit" };
-        exitItem.Click += (_, _) => ExitApp();
+        exitItem.Command = new RelayCommand(() => PostUi(ExitApp));
         var menu = new MenuFlyout();
+        menu.Items.Add(settingsItem);
+        menu.Items.Add(rescanItem);
         menu.Items.Add(exitItem);
         _tray.ContextFlyout = menu;
         try { _tray.ForceCreate(false); }
@@ -120,29 +155,20 @@ public sealed partial class App : Application
         }
 
         _hotkey = new HotkeyWindow(OnHotkey);
-        if (!_hotkey.RegisterAltSpace())
-        {
-            if (_tray is not null) _tray.ToolTipText = "WinLight — Alt+Space unavailable; click to open";
-            if (_tray?.IsCreated == true)
-                _tray.ShowNotification("WinLight", "Alt+Space is in use. Click the tray icon to open WinLight.");
-            else
-            {
-                _error.Text = "Alt+Space is already in use";
-                _error.Visibility = Visibility.Visible;
-                Show();
-            }
-        }
+        _systemEvents = new SystemEventWindow(OnTaskbarCreated, OnSessionResumed);
+        _ = LoadSettingsAndRegisterAsync();
         _indexer = new AppIndexer(OnIndexUpdated);
         _ = LoadIndexThenRefreshAsync();
         _ = LoadUsageAsync();
-        RegisterStartup();
         _ = ListenForSecondInstanceAsync(_stop.Token);
+        if (Environment.GetEnvironmentVariable("WINLIGHT_TEST_EXCEPTIONS") == "1")
+            RunExceptionProbes();
     }
 
     private void OnIndexUpdated(IReadOnlyList<AppItem> items)
     {
         if (items.Count > 0) _ = SaveIndexAsync(items);
-        _dispatcher?.TryEnqueue(() => PublishIndex(items, isComplete: true));
+        PostUi(() => PublishIndex(items, isComplete: true));
     }
 
     private async Task LoadIndexThenRefreshAsync()
@@ -158,7 +184,7 @@ public sealed partial class App : Application
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested) { return; }
         catch (Exception error) { AppLog.Error("Load index snapshot", error); }
-        _dispatcher?.TryEnqueue(() =>
+        PostUi(() =>
         {
             if (cached is { Length: > 0 }) PublishIndex(cached, isComplete: false);
             _indexer?.Refresh();
@@ -227,8 +253,10 @@ public sealed partial class App : Application
 
     private void OnHotkey(long stamp)
     {
+        if (PerfLog.Enabled) PerfLog.Point("hotkey_received", $"visible={_window?.AppWindow.IsVisible};showing={_showing}");
         _pendingHotkeyFrame = stamp;
         Toggle();
+        if (PerfLog.Enabled) PerfLog.Point("hotkey_toggled", $"visible={_window?.AppWindow.IsVisible};showing={_showing}");
         if (stamp == 0 || !_showing) _pendingHotkeyFrame = 0;
         else CompositionTarget.Rendering += OnFirstRenderedFrame;
     }
@@ -258,20 +286,28 @@ public sealed partial class App : Application
             _indexer?.Refresh();
         }
         _showing = true;
+        _activationGate.BeginShow();
         if (_input is not null) _input.Text = string.Empty;
         UpdateResults();
         OverlayWindow.Place(_window, _logicalHeight);
         _window.AppWindow.Show();
+        if (PerfLog.Enabled) PerfLog.Point("window_show", $"visible={_window.AppWindow.IsVisible}");
         OverlayWindow.BringToForeground(_window);
-        _dispatcher?.TryEnqueue(() =>
+        PostUi(() =>
         {
             bool focused = _input?.Focus(FocusState.Programmatic) == true;
+            nint foreground = ForegroundWindowHandle();
+            nint own = WinRT.Interop.WindowNative.GetWindowHandle(_window);
+            if (foreground == own && focused) _activationGate.Activated();
+            if (PerfLog.Enabled) PerfLog.Point("overlay_focus_ready",
+                $"focused={focused};foreground={foreground};own={own};armed={_activationGate.ShouldHideOnDeactivated}");
             if (DiagnosticLog.Enabled) DiagnosticLog.Write($"TextBox focus after activation: {focused}");
         });
     }
 
     private void Hide()
     {
+        if (PerfLog.Enabled) PerfLog.Point("window_hide", $"visible_before={_window?.AppWindow.IsVisible}");
         _showing = false;
         if (PerfLog.Enabled && ++_hideCount % 500 == 0)
         {
@@ -344,14 +380,28 @@ public sealed partial class App : Application
             $"active={_windowActive};visible={_window?.AppWindow.IsVisible};focus={_input?.FocusState};foreground={foreground};own={own};text={_input?.Text.Replace('|', ' ')}");
     }
 
+    private static unsafe nint ForegroundWindowHandle() => (nint)PInvoke.GetForegroundWindow().Value;
+
     private void ExitApp()
     {
         _stop.Cancel();
         _indexer?.Dispose();
         _icons?.Dispose();
+        _systemEvents?.Dispose();
         _hotkey?.Dispose();
         _tray?.Dispose();
         Application.Current.Exit();
+    }
+
+    private void RunExceptionProbes()
+    {
+        PostUi(() => throw new InvalidOperationException("WinLight UI exception probe"));
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(250).ConfigureAwait(false);
+            try { throw new InvalidOperationException("WinLight background exception probe"); }
+            catch (Exception error) { AppLog.Error("Background exception probe", error); }
+        });
     }
 
     private async Task LoadUsageAsync()
@@ -360,7 +410,7 @@ public sealed partial class App : Application
         {
             Dictionary<string, UsageRecord> usage = await UsageStore.LoadAsync(UsageStore.DefaultPath, _stop.Token)
                 .ConfigureAwait(false);
-            _dispatcher?.TryEnqueue(() => { _search.LoadUsage(usage); UpdateResults(); });
+            PostUi(() => { _search.LoadUsage(usage); UpdateResults(); });
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
         catch (Exception error) { AppLog.Error("Load usage", error); }
@@ -383,7 +433,7 @@ public sealed partial class App : Application
                     PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                 await pipe.WaitForConnectionAsync(stop).ConfigureAwait(false);
                 if (await pipe.ReadAsync(signal, stop).ConfigureAwait(false) == 1 && signal[0] == 1)
-                    _dispatcher?.TryEnqueue(Show);
+                    PostUi(Show);
             }
             catch (OperationCanceledException) when (stop.IsCancellationRequested) { break; }
             catch (IOException error) { AppLog.Error("Second-instance pipe", error); }
@@ -396,15 +446,13 @@ public sealed partial class App : Application
         }
     }
 
-    private static void RegisterStartup()
+    private void PostUi(Action action)
     {
-        try
+        _dispatcher?.TryEnqueue(() =>
         {
-            using var key = Registry.CurrentUser.CreateSubKey(
-                @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
-            key.SetValue("WinLight", $"\"{Environment.ProcessPath}\"");
-        }
-        catch (Exception error) when (error is SecurityException or UnauthorizedAccessException)
-        { AppLog.Error("Register login startup", error); }
+            try { action(); }
+            catch (Exception error) { AppLog.Error("UI dispatcher callback", error); }
+        });
     }
+
 }

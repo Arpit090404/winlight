@@ -38,16 +38,27 @@ internal sealed class ShellIconLoader : IDisposable
 
     private void Work()
     {
-        foreach (AppResultViewModel result in _queue.GetConsumingEnumerable())
+        while (!_queue.IsCompleted)
         {
             try
             {
-                long stamp = 0;
-                if (PerfLog.Enabled) _queuedAt!.TryRemove(result, out stamp);
-                byte[]? png = ExtractPng(result.Item.LaunchPath);
-                if (png is not null) _dispatcher.TryEnqueue(() => _ = SetIconAsync(result, png, stamp));
+                foreach (AppResultViewModel result in _queue.GetConsumingEnumerable())
+                {
+                    try
+                    {
+                        long stamp = 0;
+                        if (PerfLog.Enabled) _queuedAt!.TryRemove(result, out stamp);
+                        byte[]? png = ExtractPng(result.Item.LaunchPath);
+                        if (png is not null) _dispatcher.TryEnqueue(() => _ = SetIconAsync(result, png, stamp));
+                    }
+                    catch (Exception error) { AppLog.Error($"Extract icon for {result.Name}", error); }
+                }
             }
-            catch (Exception error) { AppLog.Error($"Extract icon for {result.Name}", error); }
+            catch (Exception error)
+            {
+                AppLog.Error("Icon worker loop", error);
+                if (!_queue.IsCompleted) Thread.Sleep(1000);
+            }
         }
     }
 

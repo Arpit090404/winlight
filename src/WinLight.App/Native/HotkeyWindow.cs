@@ -5,6 +5,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.Input.KeyboardAndMouse;
 using Windows.Win32.UI.WindowsAndMessaging;
+using WinLight.Core;
 
 namespace WinLight.App.Native;
 
@@ -17,6 +18,7 @@ internal sealed unsafe class HotkeyWindow : IDisposable
     private HWND _handle;
     private readonly WNDPROC _windowProc;
     private bool _registered;
+    private HotkeyBinding _binding = HotkeyBinding.Default;
 
     public HotkeyWindow(Action<long> toggle)
     {
@@ -41,19 +43,49 @@ internal sealed unsafe class HotkeyWindow : IDisposable
         }
     }
 
-    public bool RegisterAltSpace()
+    public HotkeyBinding Binding => _binding;
+    public bool IsRegistered => _registered;
+
+    public bool Register(HotkeyBinding binding)
     {
+        if (!binding.IsValid(out _)) return false;
+        if (_registered) PInvoke.UnregisterHotKey(_handle, HotkeyId);
         _registered = PInvoke.RegisterHotKey(_handle, HotkeyId,
-            HOT_KEY_MODIFIERS.MOD_ALT | HOT_KEY_MODIFIERS.MOD_NOREPEAT, 0x20);
+            ToNative(binding.Modifiers) | HOT_KEY_MODIFIERS.MOD_NOREPEAT, (uint)binding.KeyCode);
+        if (_registered) _binding = binding;
         return _registered;
+    }
+
+    public bool TryChange(HotkeyBinding binding)
+    {
+        HotkeyBinding old = _binding;
+        if (Register(binding)) return true;
+        Register(old);
+        return false;
+    }
+
+    public bool Restore() => Register(_binding);
+
+    private static HOT_KEY_MODIFIERS ToNative(HotkeyModifiers modifiers)
+    {
+        HOT_KEY_MODIFIERS result = 0;
+        if (modifiers.HasFlag(HotkeyModifiers.Alt)) result |= HOT_KEY_MODIFIERS.MOD_ALT;
+        if (modifiers.HasFlag(HotkeyModifiers.Control)) result |= HOT_KEY_MODIFIERS.MOD_CONTROL;
+        if (modifiers.HasFlag(HotkeyModifiers.Shift)) result |= HOT_KEY_MODIFIERS.MOD_SHIFT;
+        if (modifiers.HasFlag(HotkeyModifiers.Windows)) result |= HOT_KEY_MODIFIERS.MOD_WIN;
+        return result;
     }
 
     private static LRESULT WindowProc(HWND hwnd, uint message, WPARAM wParam, LPARAM lParam)
     {
         if (message == WmHotkey && (int)wParam.Value == HotkeyId)
         {
-            long stamp = PerfLog.Enabled ? Stopwatch.GetTimestamp() : 0;
-            s_instance?._toggle(stamp);
+            try
+            {
+                long stamp = PerfLog.Enabled ? Stopwatch.GetTimestamp() : 0;
+                s_instance?._toggle(stamp);
+            }
+            catch (Exception error) { AppLog.Error("Hotkey callback", error); }
             return default;
         }
         return PInvoke.DefWindowProc(hwnd, message, wParam, lParam);

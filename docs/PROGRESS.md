@@ -69,3 +69,15 @@
 - Attributed 1,000 no-query and 1,000 query cycles before memory changes: private bytes kept rising while icon cache/queue stayed at 0 or 3/0 and live managed bytes remained small; no cache, COM, GC, or publish tuning was applied.
 - The published rerun had hotkey p95 27.350 ms immediately and 27.249 ms after idle, 30/30 typed queries, zero idle CPU, but 209.43 MB idle working set. Full before/after data and coverage limits are in `docs/PERF.md`.
 - Release build has zero warnings and all 17 tests pass. Next: isolate native memory growth and measure 5,000-index full UI rendering before further tuning.
+
+## 2026-11-08 — Reliability and Settings handoff
+- Restarting Explorer recreated the tray icon while WinLight stayed resident; user-assisted lock/unlock and sleep/wake each recovered Alt+Space, while fast user switching and mixed-DPI placement remain untested (one display available).
+- A controlled hotkey conflict opened Settings and notified through the tray; changing the binding took effect immediately, rollback preserved the old binding on failure, and the login toggle and Rescan command were exercised.
+- A simulated fullscreen foreground window exposed a premature focus-loss hide; the activation gate fixed it. The user also confirmed the overlay appeared and accepted typing over a UAC-launched Notepad.
+- The tray Settings entry opened the themed 440×340 settings window; Tab and Shift+Tab now retain normal keyboard navigation. The designer reported a zero-warning Release build; tests were intentionally not rerun after the view pass.
+- Next: verify fast user switching and mixed-DPI placement when available, then revisit the unresolved native-memory growth recorded in `docs/PERF.md`.
+
+## 2026-11-08 — Tray Settings command fix
+- Reproduced the tray Settings no-op: the published app logged no XAML Click event. H.NotifyIcon's default native popup invokes each MenuFlyoutItem Command, so the three Click handlers were never called.
+- Wired Settings, Rescan apps, and Exit through RelayCommand, with Settings and Exit queued onto the UI dispatcher. The user clicked Settings in the republished app and confirmed it opened in front with focus; gated logs showed the command on the UI thread and `settings_show_end visible=True`.
+- Release build completed with zero warnings. Tests were not rerun for this narrow UI event fix; Rescan and Exit command wiring was reviewed in code, while their tray routes remain to be hand-checked.
