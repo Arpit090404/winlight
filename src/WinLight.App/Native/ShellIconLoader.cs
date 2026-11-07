@@ -20,6 +20,8 @@ internal sealed class ShellIconLoader : IDisposable
     private readonly DispatcherQueue _dispatcher;
     private readonly Thread _worker;
 
+    public int QueuedCount => _queue.Count;
+
     public ShellIconLoader(DispatcherQueue dispatcher)
     {
         _dispatcher = dispatcher;

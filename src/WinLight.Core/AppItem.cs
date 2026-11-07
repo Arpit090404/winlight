@@ -7,7 +7,8 @@ public sealed class AppItem
 {
     public AppItem(string name, string launchPath, string identity,
         AppSource source = AppSource.Unknown, string? targetPath = null,
-        string? appUserModelId = null, string? arguments = null)
+        string? appUserModelId = null, string? arguments = null,
+        bool fromSnapshot = false)
     {
         Name = name;
         LaunchPath = launchPath;
@@ -16,6 +17,7 @@ public sealed class AppItem
         TargetPath = targetPath;
         AppUserModelId = appUserModelId;
         Arguments = arguments ?? string.Empty;
+        IsFromSnapshot = fromSnapshot;
         NormalizedName = Normalize(name);
     }
 
@@ -26,6 +28,16 @@ public sealed class AppItem
     public string? TargetPath { get; }
     public string? AppUserModelId { get; }
     public string Arguments { get; }
+    public bool IsFromSnapshot { get; }
+
+    public bool HasMissingSnapshotTarget()
+    {
+        if (!IsFromSnapshot) return false;
+        if (!string.IsNullOrWhiteSpace(TargetPath) && Path.IsPathFullyQualified(TargetPath) &&
+            !File.Exists(TargetPath) && !Directory.Exists(TargetPath)) return true;
+        return LaunchPath.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) &&
+            !File.Exists(LaunchPath);
+    }
     public string NormalizedName { get; }
 
     public static string Normalize(string value)

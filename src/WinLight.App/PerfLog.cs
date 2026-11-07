@@ -27,6 +27,17 @@ internal static class PerfLog
         Write(metric, milliseconds, detail);
     }
 
+    public static void RecordDuration(string metric, long elapsedTicks, string detail = "")
+    {
+        if (!Enabled) return;
+        Write(metric, elapsedTicks * 1000.0 / Stopwatch.Frequency, detail);
+    }
+
+    public static void Point(string metric, string detail)
+    {
+        if (Enabled) Write(metric, 0, detail);
+    }
+
     public static void RecordStartup(string milestone, string detail = "")
     {
         if (!Enabled || ProcessStartUtc is null) return;

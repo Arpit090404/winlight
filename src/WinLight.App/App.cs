@@ -14,6 +14,7 @@ using WinLight.App.Native;
 using WinLight.App.ViewModels;
 using WinLight.Core;
 using Windows.System;
+using Windows.Win32;
 
 namespace WinLight.App;
 
@@ -34,10 +35,12 @@ public sealed partial class App : Application
     private ShellIconLoader? _icons;
     private DispatcherQueue? _dispatcher;
     private bool _showing;
+    private bool _windowActive;
     private bool _hasIndex;
     private DateTimeOffset _lastIndexed;
     private int _logicalHeight = 56;
     private long _pendingHotkeyFrame;
+    private int _hideCount;
 
     partial void ConfigureVisuals(StackPanel root, TextBox input, ListView results,
         TextBlock error, LauncherViewModel viewModel);
@@ -56,6 +59,7 @@ public sealed partial class App : Application
         _input.KeyDown += OnInputKeyDown;
         _input.TextChanged += (_, _) =>
         {
+            if (PerfLog.Enabled) LogInputState("text_changed");
             long stamp = PerfLog.Enabled ? Stopwatch.GetTimestamp() : 0;
             UpdateResults(stamp);
         };
@@ -86,6 +90,7 @@ public sealed partial class App : Application
         _window.AppWindow.Closing += (_, e) => { e.Cancel = true; Hide(); };
         _window.Activated += (_, e) =>
         {
+            _windowActive = e.WindowActivationState != WindowActivationState.Deactivated;
             if (e.WindowActivationState == WindowActivationState.Deactivated) Hide();
             else if (_showing) _dispatcher?.TryEnqueue(() => _input?.Focus(FocusState.Programmatic));
         };
@@ -128,7 +133,7 @@ public sealed partial class App : Application
             }
         }
         _indexer = new AppIndexer(OnIndexUpdated);
-        _indexer.Refresh();
+        _ = LoadIndexThenRefreshAsync();
         _ = LoadUsageAsync();
         RegisterStartup();
         _ = ListenForSecondInstanceAsync(_stop.Token);
@@ -136,19 +141,53 @@ public sealed partial class App : Application
 
     private void OnIndexUpdated(IReadOnlyList<AppItem> items)
     {
+        if (items.Count > 0) _ = SaveIndexAsync(items);
+        _dispatcher?.TryEnqueue(() => PublishIndex(items, isComplete: true));
+    }
+
+    private async Task LoadIndexThenRefreshAsync()
+    {
+        AppItem[]? cached = null;
+        long loadStart = PerfLog.Stamp();
+        try
+        {
+            cached = await Task.Run(() => IndexSnapshotStore.LoadAsync(IndexSnapshotStore.DefaultPath,
+                _stop.Token), _stop.Token).ConfigureAwait(false);
+            if (PerfLog.Enabled) PerfLog.Record("index_snapshot_load", loadStart,
+                $"items={cached?.Length ?? 0}");
+        }
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested) { return; }
+        catch (Exception error) { AppLog.Error("Load index snapshot", error); }
         _dispatcher?.TryEnqueue(() =>
         {
-            _search.SetItems(items);
-            if (!_hasIndex && _search.Count > 0 && PerfLog.Enabled)
-                PerfLog.RecordStartup("index_usable", $"items={_search.Count}");
-            _resultCache.Clear();
-            if (DiagnosticLog.Enabled)
-                DiagnosticLog.Write($"Index count after {(_hasIndex ? "refresh" : "startup")}: {_search.Count}");
-            _hasIndex = true;
+            if (cached is { Length: > 0 }) PublishIndex(cached, isComplete: false);
+            _indexer?.Refresh();
+        });
+    }
+
+    private void PublishIndex(IReadOnlyList<AppItem> items, bool isComplete)
+    {
+        long dedupStart = PerfLog.Stamp();
+        _search.SetItems(items);
+        if (PerfLog.Enabled) PerfLog.Record("index_deduplicate", dedupStart, $"raw={items.Count};unique={_search.Count}");
+        if (!_hasIndex && _search.Count > 0 && PerfLog.Enabled)
+            PerfLog.RecordStartup("index_usable", $"items={_search.Count};source={(isComplete ? "scan" : "snapshot")}");
+        _resultCache.Clear();
+        if (DiagnosticLog.Enabled)
+            DiagnosticLog.Write($"Index count after {(isComplete ? "refresh" : "snapshot")}: {_search.Count}");
+        _hasIndex = _search.Count > 0;
+        if (isComplete)
+        {
             if (PerfLog.Enabled) PerfLog.RecordStartup("index_complete", $"items={_search.Count}");
             _lastIndexed = DateTimeOffset.UtcNow;
-            UpdateResults();
-        });
+        }
+        UpdateResults();
+    }
+
+    private static async Task SaveIndexAsync(IReadOnlyList<AppItem> items)
+    {
+        try { await IndexSnapshotStore.SaveAsync(IndexSnapshotStore.DefaultPath, items).ConfigureAwait(false); }
+        catch (Exception error) { AppLog.Error("Save index snapshot", error); }
     }
 
     private void UpdateResults(long perfStart = 0)
@@ -234,6 +273,13 @@ public sealed partial class App : Application
     private void Hide()
     {
         _showing = false;
+        if (PerfLog.Enabled && ++_hideCount % 500 == 0)
+        {
+            using Process process = Process.GetCurrentProcess();
+            var gc = GC.GetGCMemoryInfo();
+            PerfLog.Point("memory_cycle",
+                $"cycles={_hideCount};cache={_resultCache.Count};icon_queue={_icons?.QueuedCount ?? 0};managed_bytes={GC.GetTotalMemory(false)};gc_heap_bytes={gc.HeapSizeBytes};working_bytes={process.WorkingSet64};private_bytes={process.PrivateMemorySize64};handles={process.HandleCount};threads={process.Threads.Count}");
+        }
         if (_pendingHotkeyFrame != 0)
         {
             _pendingHotkeyFrame = 0;
@@ -269,6 +315,7 @@ public sealed partial class App : Application
 
     private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (PerfLog.Enabled) LogInputState($"key_down_{e.Key}");
         if (e.Key == VirtualKey.Escape) { Hide(); e.Handled = true; }
         else if (e.Key == VirtualKey.Down && _results is not null && _results.Items.Count > 0)
         {
@@ -285,6 +332,16 @@ public sealed partial class App : Application
             Launch(item.Item);
             e.Handled = true;
         }
+    }
+
+    private unsafe void LogInputState(string eventName)
+    {
+        if (!PerfLog.Enabled) return;
+        long stamp = PerfLog.Stamp();
+        nint foreground = (nint)PInvoke.GetForegroundWindow().Value;
+        nint own = _window is null ? 0 : WinRT.Interop.WindowNative.GetWindowHandle(_window);
+        PerfLog.Record(eventName, stamp,
+            $"active={_windowActive};visible={_window?.AppWindow.IsVisible};focus={_input?.FocusState};foreground={foreground};own={own};text={_input?.Text.Replace('|', ' ')}");
     }
 
     private void ExitApp()

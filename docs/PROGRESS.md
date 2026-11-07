@@ -62,3 +62,10 @@
 - Measured the published Release app on the normal desktop: hotkey p95 11.059 ms immediately and 14.653 ms after idle; first usable index 2.169 s.
 - Hidden idle CPU was 0 over 60 s, but working set rose from 198.22 MB at 1 minute to 237.22 MB at 10 minutes; 5,000-item core search was about 0.12 ms in BenchmarkDotNet.
 - Full results and coverage limits are in `docs/PERF.md`; Release build had zero warnings and all 12 tests passed. Next: optimizer read-only analysis before any tuning.
+
+## 2026-11-07 — Snapshot startup and performance follow-up
+- Split the published scan: AppsFolder 615 ms, Start Menu 1,130 ms including 1,108 ms of shortcut target resolution; retained the single STA COM scan and measured deduplication without changing it.
+- Added versioned, atomically written `index.json`; warm startup published 168 apps in 545 ms, then replaced them after a background scan. Missing/corrupt/old snapshots fall back to scanning, and cached missing targets produce the inline launch error.
+- Attributed 1,000 no-query and 1,000 query cycles before memory changes: private bytes kept rising while icon cache/queue stayed at 0 or 3/0 and live managed bytes remained small; no cache, COM, GC, or publish tuning was applied.
+- The published rerun had hotkey p95 27.350 ms immediately and 27.249 ms after idle, 30/30 typed queries, zero idle CPU, but 209.43 MB idle working set. Full before/after data and coverage limits are in `docs/PERF.md`.
+- Release build has zero warnings and all 17 tests pass. Next: isolate native memory growth and measure 5,000-index full UI rendering before further tuning.

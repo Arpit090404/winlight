@@ -96,7 +96,7 @@ After each phase, append 3–5 lines to `docs/PROGRESS.md`: what changed, what w
 | Metric | Budget |
 |---|---|
 | Hotkey press → window visible and focused, input ready | p95 < 100 ms (target < 60 ms) |
-| Keystroke → updated results rendered (5,000 indexed items) | < 16 ms |
+| Keystroke → updated results rendered | < 16 ms at 5,000 indexed items (the list renders at most 8 rows) |
 | App launch to "ready" (index usable) | < 1 s to first usable state; full index may finish later |
 | Idle CPU | ~0% (no timers or polling while hidden) |
 | Idle working set | < 100 MB, no growth over 24 h |

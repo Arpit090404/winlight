@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using WinLight.Core;
 
 namespace WinLight.App;
@@ -65,6 +66,7 @@ internal sealed class AppIndexer : IDisposable
     private static IReadOnlyList<AppItem> Enumerate()
     {
         var results = new List<AppItem>();
+        long appsStart = PerfLog.Stamp();
         object? shellObject = null;
         object? folderObject = null;
         try
@@ -88,6 +90,11 @@ internal sealed class AppIndexer : IDisposable
                         string path = item.Path;
                         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path)) continue;
                         string? target = Convert.ToString(item.ExtendedProperty("System.Link.TargetParsingPath"));
+                        if (IsMissingLocalTarget(target))
+                        {
+                            if (PerfLog.Enabled) PerfLog.Point("index_skip_missing_target", $"name={name};target={target}");
+                            continue;
+                        }
                         string? aumid = Convert.ToString(item.ExtendedProperty("System.AppUserModel.ID"));
                         string? arguments = Convert.ToString(item.ExtendedProperty("System.Link.Arguments"));
                         string launch = path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase)
@@ -104,8 +111,12 @@ internal sealed class AppIndexer : IDisposable
         {
             if (folderObject is not null && Marshal.IsComObject(folderObject)) Marshal.FinalReleaseComObject(folderObject);
             if (shellObject is not null && Marshal.IsComObject(shellObject)) Marshal.FinalReleaseComObject(shellObject);
+            if (PerfLog.Enabled) PerfLog.Record("index_apps_folder", appsStart, $"items={results.Count}");
         }
 
+        long shortcutsStart = PerfLog.Stamp();
+        long resolutionTicks = 0;
+        int shortcutCount = 0;
         object? shortcutShellObject = null;
         object? shortcutMetadataShellObject = null;
         try
@@ -121,10 +132,12 @@ internal sealed class AppIndexer : IDisposable
                 {
                     try
                     {
+                        shortcutCount++;
                         string name = Path.GetFileNameWithoutExtension(path);
                         string? target = null;
                         string? aumid = null;
                         string? arguments = null;
+                        long resolutionStart = PerfLog.Enabled ? Stopwatch.GetTimestamp() : 0;
                         if (shortcutShellObject is not null)
                         {
                             dynamic shortcutShell = shortcutShellObject;
@@ -140,6 +153,12 @@ internal sealed class AppIndexer : IDisposable
                             if (!string.IsNullOrWhiteSpace(shellTarget)) target = shellTarget;
                             aumid = Convert.ToString(folderItem.ExtendedProperty("System.AppUserModel.ID"));
                         }
+                        if (PerfLog.Enabled) resolutionTicks += Stopwatch.GetTimestamp() - resolutionStart;
+                        if (IsMissingLocalTarget(target))
+                        {
+                            if (PerfLog.Enabled) PerfLog.Point("index_skip_missing_target", $"name={name};target={target}");
+                            continue;
+                        }
                         results.Add(new AppItem(name, path, NormalizeIdentity(target ?? path),
                             source, NormalizeIdentity(target ?? string.Empty), aumid, arguments));
                     }
@@ -154,6 +173,11 @@ internal sealed class AppIndexer : IDisposable
                 Marshal.FinalReleaseComObject(shortcutShellObject);
             if (shortcutMetadataShellObject is not null && Marshal.IsComObject(shortcutMetadataShellObject))
                 Marshal.FinalReleaseComObject(shortcutMetadataShellObject);
+            if (PerfLog.Enabled)
+            {
+                PerfLog.Record("index_start_menu", shortcutsStart, $"shortcuts={shortcutCount}");
+                PerfLog.RecordDuration("index_lnk_target_resolution", resolutionTicks, $"shortcuts={shortcutCount}");
+            }
         }
         return results;
     }
@@ -175,6 +199,12 @@ internal sealed class AppIndexer : IDisposable
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
                 value[(programFiles32.Length + 1)..]);
         return value;
+    }
+
+    private static bool IsMissingLocalTarget(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target) || !Path.IsPathFullyQualified(target)) return false;
+        return !File.Exists(target) && !Directory.Exists(target);
     }
 
     private void Changed(object sender, FileSystemEventArgs args) => ScheduleRefresh();

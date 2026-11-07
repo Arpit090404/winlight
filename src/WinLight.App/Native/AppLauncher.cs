@@ -10,6 +10,9 @@ internal static unsafe class AppLauncher
 {
     public static void Launch(AppItem item, bool asAdmin)
     {
+        if (item.HasMissingSnapshotTarget())
+            throw new FileNotFoundException("The indexed app target no longer exists.",
+                item.TargetPath ?? item.LaunchPath);
         fixed (char* path = item.LaunchPath)
         fixed (char* verb = asAdmin ? "runas" : "open")
         {
