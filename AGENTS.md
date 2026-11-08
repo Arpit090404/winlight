@@ -11,12 +11,13 @@ Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `optimize
 **v1 (build only this):**
 - Global hotkey toggles a centered search window (default `Alt+Space`, configurable).
 - Search installed apps (classic Win32 and packaged/UWP/MSIX) by name, with fuzzy matching.
+- Evaluate complete arithmetic expressions inline and copy the selected result to the clipboard.
 - Rank results by match quality plus frecency (frequency and recency of past launches).
 - Keyboard: type to search, Up/Down to move, Enter to launch, Ctrl+Enter to launch as admin, Esc or focus loss to dismiss.
 - Runs resident in the tray, starts at login, single instance.
 - Empty query shows only the search bar; the result list appears only once the user types.
 
-**Out of scope for v1 (do not add unless asked):** file search, web search, calculator, clipboard history, plugins, telemetry, network access, auto-update, cloud anything.
+**Out of scope for v1 (do not add unless asked):** file search, web search, clipboard history, plugins, telemetry, network access, auto-update, cloud anything.
 
 ---
 
@@ -94,14 +95,7 @@ After each phase, append 3–5 lines to `docs/PROGRESS.md`: what changed, what w
 
 ## 6. Performance budgets (the optimizer enforces these)
 
-| Metric | Budget |
-|---|---|
-| Hotkey press → window visible and focused, input ready | p95 < 100 ms (target < 60 ms) |
-| Keystroke → updated results rendered | < 16 ms at 5,000 indexed items (the list renders at most 8 rows) |
-| App launch to "ready" (index usable) | < 1 s to first usable state; full index may finish later |
-| Idle CPU | ~0% (no timers or polling while hidden) |
-| Idle working set | < 100 MB, no growth over 24 h |
-| Build | Zero warnings; `dotnet build -c Release` clean |
+[`scripts/budgets.json`](scripts/budgets.json) is the sole source of numeric budgets. It defines the hotkey, query, snapshot-ready, cold-start informational, idle CPU, idle working-set, memory-plateau, and build-warning limits. The query budget applies to the stated index size and visible-row cap. Snapshot-backed index readiness is gating; cold full-scan readiness is informational as recorded in `docs/DECISIONS.md`. Keep numeric thresholds in that file rather than duplicating them here.
 
 Measure, do not guess. Use BenchmarkDotNet for matching/ranking, `dotnet-counters` / Windows Performance Recorder / PerfView for runtime behavior, and a stopwatch from `WM_HOTKEY` receipt to first rendered frame for show latency. Report numbers, not impressions.
 
@@ -123,6 +117,14 @@ Goal: it should look like it shipped with Windows 11.
 - **Restraint:** no gradients, shadows beyond what the backdrop provides, decorative animations, or branding. Less chrome is more native.
 
 The designer may ask the coder for view-model properties or commands; it must not implement logic itself.
+
+## Verification
+
+- Run `scripts/verify.ps1` after every change.
+- Run `scripts/perf.ps1 -Quick` after any change that touches the show path, search path, or indexing.
+- Report only the generated `artifacts/perf/summary.txt`; open raw logs only when a metric fails.
+- `scripts/verify.ps1` restores, builds Release with zero warnings, and runs all tests. `scripts/perf.ps1` publishes and measures the app on the current user's desktop; use `-Full` for the complete measurement set.
+- The perf wrapper records and restores a resident WinLight process from this workspace; it refuses to stop an instance outside the workspace. It restores the prior snapshot and login Run value after measurement.
 
 ---
 
@@ -170,3 +172,7 @@ A task is done when:
 - Don't swallow exceptions silently; log them.
 - Don't edit files outside your ownership area.
 - Don't mark work complete without running the app.
+
+## Providers
+
+Providers are compiled into the app and registered in the plain App composition root. Return immediately and cheaply when a query is irrelevant; do no I/O on the query path. Honor cancellation tokens, and report scores normalized to 0–1 within each provider. Keep provider dependencies in constructors. v1 registers AppsProvider and CalculatorProvider only.

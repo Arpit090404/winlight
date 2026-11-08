@@ -1,0 +1,13 @@
+{
+  "hotkey_to_visible_ms": { "p95_max": 100, "target_ms": 60 },
+  "keystroke_to_results_ms": { "max": 16, "index_items": 5000, "visible_rows_max": 8 },
+  "startup_to_usable_index_ms": { "max": 1000, "cold_gate": false, "snapshot_gate": true },
+  "idle_cpu_percent_one_core": { "max": 0.1, "sample_seconds": 60 },
+  "idle_working_set_mb": { "max": 100, "gate": false },
+  "private_bytes_after_50_cycles_mb": { "max": 130, "gate": true },
+  "private_bytes_growth_50_to_100_percent": { "max": 5, "gate": true },
+  "private_bytes_mb": { "gate": false },
+  "harness_calibration": { "attempts": 30, "unreliable_miss_rate_above": 0.10 },
+  "memory_plateau": { "duration_hours": 24, "gate": false },
+  "build_warnings": { "max": 0 }
+}

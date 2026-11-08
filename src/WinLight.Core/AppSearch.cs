@@ -29,8 +29,16 @@ public sealed class AppSearch
 
     public IReadOnlyList<AppItem> Find(string query, int limit = 8)
     {
+        IReadOnlyList<AppSearchHit> hits = FindRanked(query, limit);
+        var results = new List<AppItem>(hits.Count);
+        foreach (AppSearchHit hit in hits) results.Add(hit.Item);
+        return results;
+    }
+
+    public IReadOnlyList<AppSearchHit> FindRanked(string query, int limit = 8)
+    {
         string normalized = AppItem.Normalize(query.Trim());
-        var top = new List<(AppItem Item, double Score)>(limit);
+        var top = new List<AppSearchHit>(limit);
         DateTimeOffset now = DateTimeOffset.UtcNow;
         foreach (AppItem item in _items)
         {
@@ -43,12 +51,10 @@ public sealed class AppSearch
             int index = 0;
             while (index < top.Count && top[index].Score >= score) index++;
             if (index >= limit) continue;
-            top.Insert(index, (item, score));
+            top.Insert(index, new AppSearchHit(item, score));
             if (top.Count > limit) top.RemoveAt(limit);
         }
-        var results = new List<AppItem>(top.Count);
-        foreach (var entry in top) results.Add(entry.Item);
-        return results;
+        return top;
     }
 
     private static int Match(string name, string query)
@@ -68,3 +74,4 @@ public sealed class AppSearch
 }
 
 public readonly record struct UsageRecord(int Count, DateTimeOffset LastLaunch);
+public readonly record struct AppSearchHit(AppItem Item, double Score);

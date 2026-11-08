@@ -92,3 +92,57 @@ With focus, active-state, and foreground HWND logging enabled, **100 of 100** in
 | Working set / private after 10 minutes | 237.22 / 111.62 MB | **236.63 / 111.16 MB**, 1,166 handles, 30 threads |
 
 The rerun BenchmarkDotNet `MemoryDiagnoser` means remained close to baseline: at 200 apps, prefix/acronym/no-match **4.607 / 4.656 / 4.777 µs**; at 1,000, **22.732 / 22.291 / 23.182 µs**; at 5,000, **112.596 / 111.694 / 119.930 µs**. Allocations remained **416 B** for prefix/acronym and **328 B** for no-match. Core matching passes a 16 ms comparison, while 5,000-item full WinUI rendering and GPU present timing remain unmeasured.
+
+### Quick harness check — 2026-11-08
+
+This initial Quick run used a fixed-delay clipboard check and is superseded by the corrected repeated runs below. It is retained in its timestamped artifact directory for history. The app received all injected show/query attempts (0/23 misses in each cold and snapshot scenario). Notepad calibration reported **2/8 harness injection misses**.
+
+| Measure | Quick result | Comparison |
+|---|---:|---|
+| Immediate hotkey p50 / p95 / max | **18.162 / 25.672 / 25.672 ms** (5 shows) | Near the latest 14.148 / 27.350 / 35.429 ms (50 shows) |
+| After-idle hotkey p50 / p95 / max | **16.892 / 16.892 / 16.892 ms** (1 show after 60 seconds) | Below the latest 15.735 / 27.249 / 31.341 ms; one sample is not directly comparable to 20 |
+| Query p50 / p95 / max, cold | **0.276 / 8.796 / 8.796 ms** | Close to the latest maximum 9.512 ms |
+| Query p50 / p95 / max, snapshot | **0.284 / 9.371 / 9.371 ms** | Close to the latest maximum 9.512 ms |
+| Cold process → usable index | **1,736.692 ms** (163 items) | Better than the previous 2,168.917 ms, but still above budget |
+| Snapshot process → usable index | **472.238 ms** (163 items) | Near the previous 544.564 ms |
+| Hidden idle CPU over 60 seconds | **0 CPU seconds** | Matches the prior zero-CPU samples |
+| Working set / private bytes after idle | **222.375 / 106.24 MB** | Working set remains over budget and informational; private bytes are not gated by `docs/DECISIONS.md` |
+
+The current run did not reach 5,000 indexed items, so full UI search timing at the budget size remains unverified. The 24-hour plateau was not run. The script exits with code 1 because cold startup misses the ready-time gate; snapshot startup, hotkey, query, and CPU gates pass. This short sample is directionally consistent with the prior published Release measurements, with smaller sample counts and input calibration misses noted above.
+
+### Corrected repeated runs — 2026-11-08
+
+The fixed-delay clipboard read was producing false Notepad misses when focus had not settled or the copied text was not yet available. Calibration now waits for Notepad to become foreground, polls the clipboard for up to one second, records clipboard exceptions and rejected `SendInput` calls, and uses 30 text plus 30 Alt+Space checks. The corrected diagnostic run reported 3/60 misses (5.0%); the three Quick runs and Full run below reported 1/60, 0/60, 0/60, and 0/60. Each corrected summary remains below the 10% unreliability threshold.
+
+Immediate and after-idle hotkey values use the same event endpoint as the published baseline: p50 / p95 / max in milliseconds. The baseline p95 values were **11.1 ms immediate** and **14.7 ms after five minutes idle**. Quick samples have five immediate shows and one after-idle show after 60 seconds, so their p95 equals their single after-idle observation. Full has 30 immediate shows and 20 after-idle shows after five minutes, matching the baseline sample structure.
+
+| Run | Scenario | Samples | p50 / p95 / max (ms) | Baseline p95 (ms) |
+|---|---|---:|---:|---:|
+| Quick 1 | Cold immediate | 5 | 19.778 / 27.906 / 27.906 | 11.1 |
+| Quick 1 | Snapshot immediate | 5 | 17.898 / 29.815 / 29.815 | 11.1 |
+| Quick 1 | Snapshot after idle | 1 | 48.392 / 48.392 / 48.392 | 14.7 |
+| Quick 2 | Cold immediate | 5 | 20.093 / 28.640 / 28.640 | 11.1 |
+| Quick 2 | Snapshot immediate | 5 | 20.290 / 30.092 / 30.092 | 11.1 |
+| Quick 2 | Snapshot after idle | 1 | 21.899 / 21.899 / 21.899 | 14.7 |
+| Quick 3 | Cold immediate | 5 | 27.191 / 34.599 / 34.599 | 11.1 |
+| Quick 3 | Snapshot immediate | 5 | 27.943 / 33.331 / 33.331 | 11.1 |
+| Quick 3 | Snapshot after idle | 1 | 28.386 / 28.386 / 28.386 | 14.7 |
+| Full | Cold immediate | 30 | 22.045 / 33.148 / 36.085 | 11.1 |
+| Full | Snapshot immediate | 30 | 26.651 / 39.501 / 43.873 | 11.1 |
+| Full | Snapshot after idle | 20 | 21.449 / 29.204 / 32.938 | 14.7 |
+
+The corrected hotkey p95 values are consistently slower than the original 11.1 / 14.7 ms baseline, though they remain below the 100 ms gate. They are also slower than the latest earlier published rerun (27.350 ms immediate and 27.249 ms after idle); the Quick one-sample after-idle checks are not directly comparable to that 20-show set. The Full p95 is the better comparison and is roughly twice the original after-idle p95. The stored report in [PERF-BASELINE.md](PERF-BASELINE.md) is the comparison reference for subsequent harness runs.
+
+Across the corrected runs, Notepad text / Alt+Space miss counts were **1/30 and 0/30**, **0/30 and 0/30**, **0/30 and 0/30**, and **0/30 and 0/30**. Focus/clipboard/SendInput diagnostics were zero except for one focus miss in Quick 1. WinLight app injection missed 0/23 attempts in each Quick scenario and 0/135 in each Full scenario. Query maxima were **9.367 / 11.203 ms**, **12.242 / 8.595 ms**, **9.648 / 9.731 ms**, and **8.156 / 10.466 ms** (cold / snapshot), on an actual 163-item index. Snapshot readiness was **603.885, 548.250, 535.599, and 634.153 ms**; cold readiness was **515.229, 553.346, 516.530, and 525.912 ms** and is informational under the startup split in `docs/DECISIONS.md`. Idle CPU remained below budget. The Full 100-cycle checkpoint was **228.648 MB working set / 110.72 MB private bytes**; working set is informational and the 24-hour plateau remains unmeasured.
+
+Every run reported an identical snapshot SHA-256 and an identical HKCU Run value before and after. Each summary ends with `WinLight was stopped; restart it manually.`; the wrapper intentionally does not restart a user's resident process from the tool session. Each run's raw logs and `results.json` are retained in its timestamped directory under `artifacts/perf/`.
+
+## Repeatable verification harness
+
+Run `scripts/verify.ps1` for restore, a Release build with a warning count, and all tests. Run `scripts/perf.ps1 -Quick` for a short desktop check or `scripts/perf.ps1 -Full` for the larger cycle set. The performance wrapper publishes the unpackaged app, launches that published executable with `WINLIGHT_PERF=1`, injects keyboard input with `SendInput`, and writes `artifacts/perf/summary.txt`, `results.json`, and per-process raw `*.perf.log` files. It temporarily preserves/restores the index snapshot and current user's `WinLight` Run value. If a WinLight instance from this workspace is resident, the wrapper records its process context, stops it during measurements, and restarts it afterward; instances outside the workspace are left alone. Raw performance events are filtered by the launched process start time, while the existing app log remains intact.
+
+The harness uses the app's existing opt-in `perf.log` entries, formatted as `UTC timestamp|event name|elapsed milliseconds|detail`. The hotkey event is `hotkey_first_frame`: its stopwatch starts when `WM_HOTKEY` is received and stops at the first `CompositionTarget.Rendering` callback where the overlay is visible and the search TextBox has focus. This matches the endpoint used by the baselines above; it does not measure GPU present. The query event is `query_update`: timing starts in `TextChanged` immediately before `UpdateResults` and ends after the result collection, ListView height, and visibility are updated. It does not measure the rendered frame. The startup event is `index_usable`: elapsed process time to the first non-empty `PublishIndex`, with `source=snapshot` or `source=scan` in its detail. The cold and snapshot runs are separate published process launches; the snapshot run uses the snapshot produced by the cold scan.
+
+Hotkey and query distributions use nearest-rank p50, p95, and max (`ceil(p × n)`, one-based rank). The app's own p50/p95/max should be compared with the same endpoints in the tables above. Sample counts matter: Quick has a smaller immediate set and one after-idle show; Full has the larger immediate set and repeats the after-idle show after five minutes. The baseline after-idle set contains 20 shows after five minutes, so only Full is comparable to it. Quick's one after-idle sample is a spot check. Query update and startup timestamps come directly from the same instrumentation as the baseline. Query results are measured on the installed index; if it has fewer entries than the budgeted size, full-size UI search remains unverified.
+
+The harness calibrates the same `SendInput` path against a plain Notepad document for 30 paired attempts: Unicode text is copied back through the clipboard and Alt+Space is checked against the Notepad system menu. It reports text misses, hotkey misses, and the combined rate. Above a 10% combined miss rate, the summary labels the measurements `UNRELIABLE` and says to treat app timings as inconclusive. Working set remains informational and is reported without a failure label. Full mode gates private bytes below 130 MB after 50 successful show/hide cycles, then gates growth from cycle 50 to cycle 100 below 5%; the wrapper samples both points from the app's current-user `perf.log`. Quick mode does not run enough cycles for these gates. The latest completed Full run in [PERF-BASELINE.md](PERF-BASELINE.md) predates the cycle-aligned 50-to-100 measurement: it sampled at 50 hides and compared with the harness checkpoint after 100 more plateau cycles, so that run's 7.05% figure is a 50-to-150 comparison, not a result for the new 50-to-100 gate. The 24-hour plateau budget is not claimed from the short Quick or Full run; compare the short-cycle checkpoints only and retain the overnight limitation above. Search-at-5,000-items UI coverage is not listed as a perf failure: BenchmarkDotNet covers the 5,000-item matching budget, while desktop runs report the installed index size.

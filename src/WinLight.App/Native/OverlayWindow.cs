@@ -46,9 +46,14 @@ internal static unsafe class OverlayWindow
     public static void Place(Window window, int logicalHeight)
     {
         HWND hwnd = new(WinRT.Interop.WindowNative.GetWindowHandle(window));
-        if (!PInvoke.GetCursorPos(out var cursor))
-            throw new Win32Exception(Marshal.GetLastWin32Error());
-        DisplayArea area = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest);
+        DisplayArea area;
+        if (PInvoke.GetCursorPos(out var cursor))
+            area = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest);
+        else
+        {
+            AppLog.Error("Get cursor position", new Win32Exception(Marshal.GetLastWin32Error()));
+            area = DisplayArea.Primary;
+        }
         uint dpi = PInvoke.GetDpiForWindow(hwnd);
         double scale = dpi == 0 ? 1 : dpi / 96.0;
         int width = (int)Math.Round(640 * scale);

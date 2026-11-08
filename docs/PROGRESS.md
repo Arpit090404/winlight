@@ -81,3 +81,48 @@
 - Reproduced the tray Settings no-op: the published app logged no XAML Click event. H.NotifyIcon's default native popup invokes each MenuFlyoutItem Command, so the three Click handlers were never called.
 - Wired Settings, Rescan apps, and Exit through RelayCommand, with Settings and Exit queued onto the UI dispatcher. The user clicked Settings in the republished app and confirmed it opened in front with focus; gated logs showed the command on the UI thread and `settings_show_end visible=True`.
 - Release build completed with zero warnings. Tests were not rerun for this narrow UI event fix; Rescan and Exit command wiring was reviewed in code, while their tray routes remain to be hand-checked.
+
+## 2026-11-08 — Verification harness
+- Added `scripts/verify.ps1` for restore, zero-warning Release build, and the complete test suite; numeric performance budgets now live in `scripts/budgets.json`.
+- Added a published-app desktop performance harness and `scripts/perf.ps1` with Quick and Full modes, JSON results, raw logs, and a concise summary under `artifacts/perf/`.
+- Verification passed: Release build had zero warnings and all 23 tests passed; the console harness also built with zero warnings.
+- Three corrected Quick runs and one Full run completed; Notepad calibration misses were 1/60, 0/60, 0/60, and 0/60, with app-side injection misses at zero. Each summary includes matching pre/post snapshot and HKCU Run checks and ends with the manual-restart instruction.
+- Snapshot startup passed in all runs (472–634 ms); cold startup is now informational. Hotkey p95 remains below the 100 ms gate but is slower than the original 11.1 / 14.7 ms baseline. Query timing covered 163 apps; the 5,000-item UI budget and 24-hour plateau remain unverified. Working set is informational.
+- All raw logs and results remain in timestamped `artifacts/perf/` directories; the latest Full report is `artifacts/perf/summary.txt`. The previously resident app remains stopped as directed.
+
+## 2026-11-08 — Search provider refactor
+
+- Captured 47 current top-eight search outputs over a deterministic 320-entry synthetic index and fixed frecency state; the golden test passed before production code changed.
+- Added a compiled-in AppsProvider, weighted SearchEngine, closed LaunchApp action, and action executor. AppSearch still performs the same matching and frecency calculation; Views and Styles were untouched.
+- Added engine tests for merge, weights, stable ties, provider errors, cancellation, and stale results. Release build and tests passed locally with zero warnings; final verification and Quick measurements are next.
+
+## 2026-11-08 — Provider refactor verification
+
+- The unchanged 47-query golden test passes after the refactor; Release build has zero warnings and all 30 tests pass.
+- Two final-source Quick runs measured snapshot hotkey p95 at 33.448/35.746 ms versus the Full reference 25.002 ms, and snapshot query p50 at 0.315/0.317 ms versus 0.327 ms.
+- Cold query p50 was 0.421/0.386 ms versus Full 0.303 ms. Each Quick run had 18 samples versus 97 in Full; cold and snapshot use the same query path and indexed 163 apps, so this remains an informational short-run variance caveat.
+
+## 2026-11-08 — Inline calculator
+
+- Added a compiled-in calculator provider with handwritten precedence parsing, invariant result formatting, percentage handling, functions/constants, and early exits for app-name queries.
+- Added CopyText execution with clipboard retry and inline failure handling; calculator rows show a Fluent glyph and expression subtitle in the existing 48 px result template.
+- Added 106 table cases under Turkish and French cultures plus subtitle, length, depth, cancellation, integration, and allocation checks; the original 47-query app golden test remains unchanged. Final verification and Quick performance measurement are next.
+- Two Quick attempts exposed an existing startup failure when Windows denied `GetCursorPos` before index publication. Overlay placement now logs that failure and falls back to the primary display; normal cursor-monitor placement is unchanged. Release build has zero warnings and all 142 tests pass; rerun Quick to verify startup.
+
+## 2026-11-08 — Calculator hot-path follow-up
+
+- A valid Quick run had 0/60 harness calibration misses but slower hotkey, query, and startup timings than the Full reference; optimizer review found unnecessary merge allocation for app-only queries and empty-query engine work during show.
+- SearchEngine now returns a sole sorted weight-1 provider result directly after checking all providers, and empty queries cancel any in-flight search without allocating a new query; weighted merges and stale-result handling remain intact.
+- Added regression tests for both paths. Release build has zero warnings and all 144 tests pass; the unchanged 47-query app golden test remains green. Final Quick remeasurement is next.
+
+## 2026-11-08 — Result-template hot-path follow-up
+
+- A calibrated Quick after engine shortcuts still had slow repeated app-row updates; optimizer review isolated the calculator glyph/subtitle controls added to every app row.
+- Split the result templates once at startup: app rows use the original image and single-title tree, while calculator rows use the Fluent glyph and subtitle. Template selection adds no per-query construction beyond the selected rows.
+- Release build remains warning-free and all 144 tests pass. The app golden test is unchanged; a published Quick rerun will measure the template effect separately from system load.
+
+## 2026-11-08 — Calculator desktop publish check
+
+- Stopped the existing workspace WinLight process and republished the current working-tree source at HEAD to `publish/WinLight` in Release.
+- Confirmed the published `WinLight.App.pri` matches the build output by SHA-256; the published app started and remained resident in desktop session 1.
+- Alt+Space opened the bar. UI Automation read `12*8 = 96` as the first result and `pi = 3.14159265359` as the sole result for `=pi`; Esc dismissed the bar. No perf or broader tests were run by request.

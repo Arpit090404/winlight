@@ -48,7 +48,7 @@ internal sealed class ShellIconLoader : IDisposable
                     {
                         long stamp = 0;
                         if (PerfLog.Enabled) _queuedAt!.TryRemove(result, out stamp);
-                        byte[]? png = ExtractPng(result.Item.LaunchPath);
+                        byte[]? png = result.IconRef is { } path ? ExtractPng(path) : null;
                         if (png is not null) _dispatcher.TryEnqueue(() => _ = SetIconAsync(result, png, stamp));
                     }
                     catch (Exception error) { AppLog.Error($"Extract icon for {result.Name}", error); }

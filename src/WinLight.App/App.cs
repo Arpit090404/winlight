@@ -22,6 +22,7 @@ public sealed partial class App : Application
 {
     private readonly CancellationTokenSource _stop = new();
     private readonly AppSearch _search = new();
+    private readonly SearchEngine _engine;
     private readonly LauncherViewModel _viewModel = new();
     private readonly ObservableCollection<AppResultViewModel> _visibleResults = [];
     private readonly Dictionary<string, AppResultViewModel> _resultCache = new(StringComparer.OrdinalIgnoreCase);
@@ -43,12 +44,14 @@ public sealed partial class App : Application
     private int _logicalHeight = 56;
     private long _pendingHotkeyFrame;
     private int _hideCount;
+    private long _resultQueryId;
 
     partial void ConfigureVisuals(StackPanel root, TextBox input, ListView results,
         TextBlock error, LauncherViewModel viewModel);
 
     public App()
     {
+        _engine = new SearchEngine([(new AppsProvider(_search), 1d), (new CalculatorProvider(), 1.1d)], AppLog.Error);
         InitializeComponent();
         UnhandledException += (_, e) =>
         {
@@ -86,7 +89,7 @@ public sealed partial class App : Application
             Visibility = Visibility.Collapsed,
             ItemsSource = _visibleResults
         };
-        _results.ItemClick += (_, e) => { if (e.ClickedItem is AppResultViewModel item) Launch(item.Item); };
+        _results.ItemClick += (_, e) => { if (e.ClickedItem is AppResultViewModel item) _ = ExecuteResultAsync(item.Result); };
         _results.SelectionChanged += (_, _) =>
         {
             if (DiagnosticLog.Enabled)
@@ -98,6 +101,11 @@ public sealed partial class App : Application
         panel.Children.Add(_results);
         panel.Children.Add(_error);
         ConfigureVisuals(panel, _input, _results, _error, _viewModel);
+        ResourceDictionary templates = panel.Resources.MergedDictionaries[0];
+        _results.ItemTemplate = null;
+        _results.ItemTemplateSelector = new ResultTemplateSelector(
+            (DataTemplate)templates["WinLightResultTemplate"],
+            (DataTemplate)templates["WinLightCalculatorTemplate"]);
         _window = new Window { Content = panel };
         OverlayWindow.Configure(_window);
         OverlayWindow.Place(_window, 56);
@@ -220,17 +228,46 @@ public sealed partial class App : Application
     {
         if (_input is null || _results is null || _window is null) return;
         _viewModel.SetQuery(_input.Text);
-        IReadOnlyList<AppItem> matches = _viewModel.IsResultsVisible
-            ? _search.Find(_input.Text) : Array.Empty<AppItem>();
+        long queryId = ++_resultQueryId;
+        if (!_viewModel.IsResultsVisible)
+        {
+            _engine.CancelCurrentQuery();
+            ApplyResults(Array.Empty<SearchResult>(), perfStart);
+            return;
+        }
+        ValueTask<IReadOnlyList<SearchResult>> pending = _engine.QueryAsync(_input.Text);
+        if (pending.IsCompletedSuccessfully)
+            ApplyResults(pending.Result, perfStart);
+        else
+            _ = ApplyResultsAsync(pending, queryId, perfStart);
+    }
+
+    private async Task ApplyResultsAsync(ValueTask<IReadOnlyList<SearchResult>> pending,
+        long queryId, long perfStart)
+    {
+        try
+        {
+            IReadOnlyList<SearchResult> matches = await pending.ConfigureAwait(true);
+            if (queryId == _resultQueryId) ApplyResults(matches, perfStart);
+        }
+        catch (Exception error) { AppLog.Error("Apply search results", error); }
+    }
+
+    private void ApplyResults(IReadOnlyList<SearchResult> matches, long perfStart)
+    {
+        if (_input is null || _results is null || _window is null) return;
         if (DiagnosticLog.Enabled) DiagnosticLog.Write($"Query: '{_input.Text}', results: {matches.Count}");
         _visibleResults.Clear();
-        foreach (AppItem item in matches)
+        foreach (SearchResult item in matches)
         {
             long iconLookup = PerfLog.Stamp();
-            if (!_resultCache.TryGetValue(item.LaunchPath, out AppResultViewModel? result))
+            AppResultViewModel result;
+            if (item.IconRef is null)
+                result = new AppResultViewModel(item);
+            else if (!_resultCache.TryGetValue(item.IconRef, out result!))
             {
                 result = new AppResultViewModel(item);
-                _resultCache.Add(item.LaunchPath, result);
+                _resultCache.Add(item.IconRef, result);
                 _icons?.Queue(result);
             }
             else if (PerfLog.Enabled && result.Icon is not null)
@@ -324,25 +361,31 @@ public sealed partial class App : Application
         _window?.AppWindow.Hide();
     }
 
-    private void Launch(AppItem item)
+    private async Task ExecuteResultAsync(SearchResult result)
     {
         try
         {
             bool admin = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-            AppLauncher.Launch(item, admin);
-            if (DiagnosticLog.Enabled) DiagnosticLog.Write($"Launched result: {item.Name}, admin: {admin}");
-            _search.RecordLaunch(item, DateTimeOffset.UtcNow);
-            _ = SaveUsageAsync(_search.SnapshotUsage());
+            await ResultActionExecutor.ExecuteAsync(result.Action, admin);
+            if (DiagnosticLog.Enabled) DiagnosticLog.Write($"Executed result: {result.Title}, admin: {admin}");
+            if (result.Action is ResultAction.LaunchApp launch)
+            {
+                _search.RecordLaunch(launch.Item, DateTimeOffset.UtcNow);
+                _ = SaveUsageAsync(_search.SnapshotUsage());
+            }
             if (_error is not null) _error.Visibility = Visibility.Collapsed;
             Hide();
         }
         catch (Exception error)
         {
-            AppLog.Error($"Launch {item.Name}", error);
+            bool copying = result.Action is ResultAction.CopyText;
+            AppLog.Error($"{(copying ? "Copy" : "Launch")} {result.Title}", error);
             if (_error is not null)
             {
-                _error.Text = $"Could not open {item.Name}: {error.Message}";
+                _error.Text = copying
+                    ? $"Could not copy {result.Title}: {error.Message}"
+                    : $"Could not open {result.Title}: {error.Message}";
                 _error.Visibility = Visibility.Visible;
             }
             UpdateResults();
@@ -365,7 +408,7 @@ public sealed partial class App : Application
         }
         else if (e.Key == VirtualKey.Enter && _results?.SelectedItem is AppResultViewModel item)
         {
-            Launch(item.Item);
+            _ = ExecuteResultAsync(item.Result);
             e.Handled = true;
         }
     }
