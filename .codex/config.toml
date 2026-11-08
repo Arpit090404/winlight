@@ -8,7 +8,7 @@ approval_policy = "on-request"
 
 [agents]
 # Three roles (coder, designer, optimizer) -> at most 3 concurrent subagents.
-max_threads = 3
+max_threads = 4
 # Subagents cannot spawn their own subagents; keeps cost and coordination predictable.
 max_depth = 1
 

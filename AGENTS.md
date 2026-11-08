@@ -69,6 +69,7 @@ Only **one agent writes to a given area at a time.** Parallel work is allowed on
 | `coder` | write | `WinLight.Core`, `ViewModels/`, `Native/`, tests, benchmarks, project files, `docs/PROGRESS.md` | Visual styling, XAML layout/templates |
 | `designer` | write | `Views/`, `Styles/`, `Assets/` only | Search, indexing, launching, hotkey, interop logic |
 | `optimizer` | **read-only** | Nothing | Everything. Reports findings; `coder` applies fixes |
+| `scripter` | write | scripts/, tools/, scripts/budgets.json, docs/PERF.md | src/|
 
 Handoff order: `coder` builds a working skeleton → `coder` adds features → `designer` and `optimizer` run in parallel → `coder` applies the optimizer's fixes and any designer-requested hooks → re-measure.
 
