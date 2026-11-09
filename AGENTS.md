@@ -115,6 +115,7 @@ Goal: it should look like it shipped with Windows 11.
 - **Icons:** Segoe Fluent Icons glyphs for UI chrome; app icons come from the shell.
 - **Layout:** 4 px spacing grid. Search box ~48–56 px tall, result rows ~48 px, window width ~640 px, positioned horizontally centered on the active monitor at roughly one-fifth down from the top. Respect per-monitor DPI.
 - **Selection and hover:** use the standard list-item visual states and theme brushes (subtle fill for hover, accent indicator for selection), matching WinUI `ListView` behavior.
+- **Search-result presentation:** show an Apps header above app results and a Files & Folders header above file and folder results; Apps precede Files & Folders, each category retains its ranked order, and empty categories have no header. Headers are not selectable; calculator results keep their existing row presentation and behavior.
 - **Motion:** show/hide transitions ≤ 150 ms, opacity and slight translate only, using standard easing. Honor the system "animation effects" setting and disable animation when it is off. Never animate on the keystroke path.
 - **Keyboard and accessibility:** fully keyboard-operable, visible focus, `AutomationProperties.Name` on every interactive element, Narrator announces the selected result, usable under High Contrast themes and 200% text scaling.
 - **Empty and error states:** a quiet "No results" row; inline launch-failure message in theme error colors. No dialogs.

@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WinLight.Core;
 
@@ -13,6 +14,12 @@ public partial class AppResultViewModel(SearchResult result) : ObservableObject
     public bool IsCalculator => Result.ProviderId == "calculator";
     public bool IsFile => Result.ProviderId == "files";
     public string? IconRef => Result.IconRef;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SectionHeaderVisibility))]
+    public partial string? SectionHeader { get; set; }
+
+    public Visibility SectionHeaderVisibility => SectionHeader is null ? Visibility.Collapsed : Visibility.Visible;
 
     [ObservableProperty]
     public partial BitmapImage? Icon { get; set; }

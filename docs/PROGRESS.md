@@ -1,5 +1,10 @@
 # Progress
 
+## 2026-11-10 — Grouped search-result presentation
+- Kept the single selectable result list and its existing keyboard and launch actions; presentation now places app results above file and folder results while preserving order within each category.
+- Added first-result header metadata for the Apps and Files & Folders sections, with calculator results left headerless and in their existing order relative to apps.
+- The list and overlay height now include only visible section headers, within the existing 384 px result viewport. Per request, tests and verification/performance scripts were not run; next is a visual and keyboard check on the desktop.
+
 ## 2026-11-10 — Downloads and Documents filename search (performance follow-up pending)
 - Added a compiled-in file provider, shared-parent in-memory index, background watcher updates and reconciliation, file/folder shell actions, and a file row with icon and parent path; no new packages or query-time I/O.
 - Added isolated tests for matching, ranking, duplicates, nested trees, missing roots, watcher create/rename/move/delete, links, cancellation, and app/calculator priority. Release build has zero warnings and 153 tests pass; published desktop checks opened a Downloads text file and folder successfully.

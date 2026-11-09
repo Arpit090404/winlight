@@ -58,7 +58,7 @@ public sealed partial class App
         results.Padding = new Thickness(0);
         results.BorderThickness = new Thickness(0);
         results.SelectionMode = ListViewSelectionMode.Single;
-        AutomationProperties.SetName(results, "App search results");
+        AutomationProperties.SetName(results, "Search results");
         results.SelectionChanged += (_, _) =>
         {
             UpdateSelectionPills(results);

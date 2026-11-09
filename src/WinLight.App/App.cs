@@ -49,6 +49,7 @@ public sealed partial class App : Application
     private long _pendingHotkeyFrame;
     private int _hideCount;
     private long _resultQueryId;
+    private const int SectionHeaderHeight = 28;
 
     partial void ConfigureVisuals(StackPanel root, TextBox input, ListView results,
         TextBlock error, LauncherViewModel viewModel);
@@ -304,28 +305,28 @@ public sealed partial class App : Application
         if (_input is null || _results is null || _window is null) return;
         if (DiagnosticLog.Enabled) DiagnosticLog.Write($"Query: '{_input.Text}', results: {matches.Count}");
         _visibleResults.Clear();
+        bool appHeaderShown = false;
+        bool fileHeaderShown = false;
         foreach (SearchResult item in matches)
         {
-            if (_resultCache.Count >= 256) _resultCache.Clear();
-            long iconLookup = PerfLog.Stamp();
-            AppResultViewModel result;
-            if (item.IconRef is null)
-                result = new AppResultViewModel(item);
-            else if (!_resultCache.TryGetValue(item.IconRef, out result!))
-            {
-                result = new AppResultViewModel(item);
-                _resultCache.Add(item.IconRef, result);
-                _icons?.Queue(result);
-            }
-            else if (PerfLog.Enabled && result.Icon is not null)
-                PerfLog.Record("icon_cached", iconLookup, $"name={result.Name}");
-            _visibleResults.Add(result);
+            if (item.ProviderId == "files") continue;
+            bool firstApp = item.ProviderId == "apps" && !appHeaderShown;
+            AddVisibleResult(item, firstApp ? "Apps" : null);
+            if (firstApp) appHeaderShown = true;
+        }
+        foreach (SearchResult item in matches)
+        {
+            if (item.ProviderId != "files") continue;
+            AddVisibleResult(item, fileHeaderShown ? null : "Files & Folders");
+            fileHeaderShown = true;
         }
         _results.Visibility = _viewModel.IsResultsVisible ? Visibility.Visible : Visibility.Collapsed;
         if (DiagnosticLog.Enabled) DiagnosticLog.Write($"ListView ItemsSource count: {matches.Count}");
         _results.SelectedIndex = matches.Count == 0 ? -1 : 0;
-        _results.Height = matches.Count * 48;
-        int logicalHeight = 56 + matches.Count * 48 + (_error?.Visibility == Visibility.Visible ? 32 : 0);
+        int listHeight = Math.Min(384, matches.Count * 48 +
+            (appHeaderShown ? SectionHeaderHeight : 0) + (fileHeaderShown ? SectionHeaderHeight : 0));
+        _results.Height = listHeight;
+        int logicalHeight = 56 + listHeight + (_error?.Visibility == Visibility.Visible ? 32 : 0);
         if (logicalHeight != _logicalHeight)
         {
             _logicalHeight = logicalHeight;
@@ -333,6 +334,25 @@ public sealed partial class App : Application
         }
         if (PerfLog.Enabled && perfStart != 0)
             PerfLog.Record("query_update", perfStart, $"query={_input.Text.Replace('|', ' ')};results={matches.Count};index={_search.Count}");
+    }
+
+    private void AddVisibleResult(SearchResult item, string? sectionHeader)
+    {
+        if (_resultCache.Count >= 256) _resultCache.Clear();
+        long iconLookup = PerfLog.Stamp();
+        AppResultViewModel result;
+        if (item.IconRef is null)
+            result = new AppResultViewModel(item);
+        else if (!_resultCache.TryGetValue(item.IconRef, out result!))
+        {
+            result = new AppResultViewModel(item);
+            _resultCache.Add(item.IconRef, result);
+            _icons?.Queue(result);
+        }
+        else if (PerfLog.Enabled && result.Icon is not null)
+            PerfLog.Record("icon_cached", iconLookup, $"name={result.Name}");
+        result.SectionHeader = sectionHeader;
+        _visibleResults.Add(result);
     }
 
     private void OnHotkey(long stamp)

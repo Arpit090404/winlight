@@ -17,7 +17,7 @@
 
     <Style x:Key="WinLightResultContainerStyle" TargetType="ListViewItem">
         <Setter Property="MinHeight" Value="48" />
-        <Setter Property="Height" Value="48" />
+        <Setter Property="Height" Value="Auto" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Margin" Value="0" />
         <Setter Property="BorderThickness" Value="0" />
@@ -26,27 +26,35 @@
     </Style>
 
     <DataTemplate x:Key="WinLightResultTemplate">
-        <Grid Height="48" AutomationProperties.Name="{Binding Name}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="16" />
-                <ColumnDefinition Width="32" />
-                <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="16" />
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Tag="WinLightSelectionPill"
-                    Width="3" Height="24" Margin="8,0,0,0"
-                    HorizontalAlignment="Left" VerticalAlignment="Center"
-                    CornerRadius="2" Visibility="Collapsed"
-                    Background="{ThemeResource AccentFillColorDefaultBrush}" />
-            <Image Grid.Column="1" Source="{Binding Icon}" Width="32" Height="32"
-                   VerticalAlignment="Center" Stretch="Uniform"
-                   AutomationProperties.AccessibilityView="Raw" />
-            <TextBlock Grid.Column="3" Text="{Binding Name}"
-                       Style="{ThemeResource BodyTextBlockStyle}"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+        <StackPanel AutomationProperties.Name="{Binding Name}">
+            <Grid Height="28" Visibility="{Binding SectionHeaderVisibility}"
+                  IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw">
+                <TextBlock Text="{Binding SectionHeader}" Margin="16,0,16,0"
+                           Style="{ThemeResource BodyStrongTextBlockStyle}"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </Grid>
+            <Grid Height="48">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="32" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Tag="WinLightSelectionPill"
+                        Width="3" Height="24" Margin="8,0,0,0"
+                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                        CornerRadius="2" Visibility="Collapsed"
+                        Background="{ThemeResource AccentFillColorDefaultBrush}" />
+                <Image Grid.Column="1" Source="{Binding Icon}" Width="32" Height="32"
+                       VerticalAlignment="Center" Stretch="Uniform"
                        AutomationProperties.AccessibilityView="Raw" />
-        </Grid>
+                <TextBlock Grid.Column="3" Text="{Binding Name}"
+                           Style="{ThemeResource BodyTextBlockStyle}"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AccessibilityView="Raw" />
+            </Grid>
+        </StackPanel>
     </DataTemplate>
 
     <DataTemplate x:Key="WinLightCalculatorTemplate">
@@ -76,28 +84,36 @@
     </DataTemplate>
 
     <DataTemplate x:Key="WinLightFileTemplate">
-        <Grid Height="48" AutomationProperties.Name="{Binding AccessibleName}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="16" />
-                <ColumnDefinition Width="32" />
-                <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="16" />
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Tag="WinLightSelectionPill"
-                    Width="3" Height="24" Margin="8,0,0,0"
-                    HorizontalAlignment="Left" VerticalAlignment="Center"
-                    CornerRadius="2" Visibility="Collapsed"
-                    Background="{ThemeResource AccentFillColorDefaultBrush}" />
-            <Image Grid.Column="1" Source="{Binding Icon}" Width="32" Height="32"
-                   VerticalAlignment="Center" Stretch="Uniform"
-                   AutomationProperties.AccessibilityView="Raw" />
-            <StackPanel Grid.Column="3" VerticalAlignment="Center">
-                <TextBlock Text="{Binding Name}" Style="{ThemeResource BodyTextBlockStyle}"
-                           TextTrimming="CharacterEllipsis" AutomationProperties.AccessibilityView="Raw" />
-                <TextBlock Text="{Binding Subtitle}" Style="{ThemeResource CaptionTextBlockStyle}"
-                           TextTrimming="CharacterEllipsis" AutomationProperties.AccessibilityView="Raw" />
-            </StackPanel>
-        </Grid>
+        <StackPanel AutomationProperties.Name="{Binding AccessibleName}">
+            <Grid Height="28" Visibility="{Binding SectionHeaderVisibility}"
+                  IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw">
+                <TextBlock Text="{Binding SectionHeader}" Margin="16,0,16,0"
+                           Style="{ThemeResource BodyStrongTextBlockStyle}"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </Grid>
+            <Grid Height="48">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="32" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Tag="WinLightSelectionPill"
+                        Width="3" Height="24" Margin="8,0,0,0"
+                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                        CornerRadius="2" Visibility="Collapsed"
+                        Background="{ThemeResource AccentFillColorDefaultBrush}" />
+                <Image Grid.Column="1" Source="{Binding Icon}" Width="32" Height="32"
+                       VerticalAlignment="Center" Stretch="Uniform"
+                       AutomationProperties.AccessibilityView="Raw" />
+                <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" Style="{ThemeResource BodyTextBlockStyle}"
+                               TextTrimming="CharacterEllipsis" AutomationProperties.AccessibilityView="Raw" />
+                    <TextBlock Text="{Binding Subtitle}" Style="{ThemeResource CaptionTextBlockStyle}"
+                               TextTrimming="CharacterEllipsis" AutomationProperties.AccessibilityView="Raw" />
+                </StackPanel>
+            </Grid>
+        </StackPanel>
     </DataTemplate>
 </ResourceDictionary>
