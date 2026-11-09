@@ -17,7 +17,11 @@ Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `optimize
 - Runs resident in the tray, starts at login, single instance.
 - Empty query shows only the search bar; the result list appears only once the user types.
 
-**Out of scope for v1 (do not add unless asked):** file search, web search, clipboard history, plugins, telemetry, network access, auto-update, cloud anything.
+**Planned (do NOT build until asked; approach is decided when the phase starts):**
+- Pomodoro timer.
+- File search, limited to the Downloads and Documents folders.
+
+**Out of scope (do not add unless asked):** web search, clipboard history, plugins, telemetry, network access, auto-update, cloud anything.
 
 ---
 
