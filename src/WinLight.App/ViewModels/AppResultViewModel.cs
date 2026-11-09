@@ -11,6 +11,7 @@ public partial class AppResultViewModel(SearchResult result) : ObservableObject
     public string? Subtitle => Result.Subtitle;
     public string AccessibleName => Result.Subtitle is null ? Name : $"{Result.Subtitle} {Name}";
     public bool IsCalculator => Result.ProviderId == "calculator";
+    public bool IsFile => Result.ProviderId == "files";
     public string? IconRef => Result.IconRef;
 
     [ObservableProperty]

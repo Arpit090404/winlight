@@ -22,6 +22,7 @@ public sealed partial class App : Application
 {
     private readonly CancellationTokenSource _stop = new();
     private readonly AppSearch _search = new();
+    private readonly FileSearchProvider _files = new();
     private readonly SearchEngine _engine;
     private readonly LauncherViewModel _viewModel = new();
     private readonly ObservableCollection<AppResultViewModel> _visibleResults = [];
@@ -34,13 +35,16 @@ public sealed partial class App : Application
     private HotkeyWindow? _hotkey;
     private SystemEventWindow? _systemEvents;
     private AppIndexer? _indexer;
+    private FileIndexService? _fileIndexer;
     private ShellIconLoader? _icons;
     private DispatcherQueue? _dispatcher;
-    private bool _showing;
+    private volatile bool _showing;
+    private volatile bool _fileIndexDirty;
     private bool _windowActive;
     private readonly WindowActivationGate _activationGate = new();
     private bool _hasIndex;
     private DateTimeOffset _lastIndexed;
+    private DateTimeOffset _lastFilesReconciled = DateTimeOffset.UtcNow;
     private int _logicalHeight = 56;
     private long _pendingHotkeyFrame;
     private int _hideCount;
@@ -51,7 +55,9 @@ public sealed partial class App : Application
 
     public App()
     {
-        _engine = new SearchEngine([(new AppsProvider(_search), 1d), (new CalculatorProvider(), 1.1d)], AppLog.Error);
+        _engine = new SearchEngine([(new AppsProvider(_search), 1d),
+            (new CalculatorProvider(), 1.1d), (_files, 0.7d)], AppLog.Error);
+        _ = _files.QueryAsync("warmup", CancellationToken.None);
         InitializeComponent();
         UnhandledException += (_, e) =>
         {
@@ -105,7 +111,8 @@ public sealed partial class App : Application
         _results.ItemTemplate = null;
         _results.ItemTemplateSelector = new ResultTemplateSelector(
             (DataTemplate)templates["WinLightResultTemplate"],
-            (DataTemplate)templates["WinLightCalculatorTemplate"]);
+            (DataTemplate)templates["WinLightCalculatorTemplate"],
+            (DataTemplate)templates["WinLightFileTemplate"]);
         _window = new Window { Content = panel };
         OverlayWindow.Configure(_window);
         OverlayWindow.Place(_window, 56);
@@ -176,7 +183,31 @@ public sealed partial class App : Application
     private void OnIndexUpdated(IReadOnlyList<AppItem> items)
     {
         if (items.Count > 0) _ = SaveIndexAsync(items);
-        PostUi(() => PublishIndex(items, isComplete: true));
+        PostUi(() =>
+        {
+            PublishIndex(items, isComplete: true);
+            StartFileIndex();
+        });
+    }
+
+    private void StartFileIndex()
+    {
+        if (_fileIndexer is not null) return;
+        _fileIndexer = new FileIndexService([
+            DownloadsPath(),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)],
+            _files, AppLog.Error, () =>
+            {
+                _fileIndexDirty = true;
+                if (_showing) PostUi(() =>
+                {
+                    if (!_showing) return;
+                    _lastFilesReconciled = DateTimeOffset.UtcNow;
+                    _resultCache.Clear();
+                    _fileIndexDirty = false;
+                    UpdateResults();
+                });
+            });
     }
 
     private async Task LoadIndexThenRefreshAsync()
@@ -224,6 +255,21 @@ public sealed partial class App : Application
         catch (Exception error) { AppLog.Error("Save index snapshot", error); }
     }
 
+    private static string DownloadsPath()
+    {
+        const string key = @"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
+        const string folderId = "{374DE290-123F-4565-9164-39C4925E467B}";
+        try
+        {
+            using RegistryKey? folders = Registry.CurrentUser.OpenSubKey(key);
+            if (folders?.GetValue(folderId, null, RegistryValueOptions.DoNotExpandEnvironmentNames)
+                is string value && !string.IsNullOrWhiteSpace(value))
+                return Environment.ExpandEnvironmentVariables(value);
+        }
+        catch (Exception error) { AppLog.Error("Resolve Downloads folder", error); }
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+    }
+
     private void UpdateResults(long perfStart = 0)
     {
         if (_input is null || _results is null || _window is null) return;
@@ -260,6 +306,7 @@ public sealed partial class App : Application
         _visibleResults.Clear();
         foreach (SearchResult item in matches)
         {
+            if (_resultCache.Count >= 256) _resultCache.Clear();
             long iconLookup = PerfLog.Stamp();
             AppResultViewModel result;
             if (item.IconRef is null)
@@ -322,7 +369,17 @@ public sealed partial class App : Application
             _lastIndexed = DateTimeOffset.UtcNow;
             _indexer?.Refresh();
         }
+        if (DateTimeOffset.UtcNow - _lastFilesReconciled >= TimeSpan.FromMinutes(15))
+        {
+            _lastFilesReconciled = DateTimeOffset.UtcNow;
+            _fileIndexer?.RequestReconcile();
+        }
         _showing = true;
+        if (_fileIndexDirty)
+        {
+            _resultCache.Clear();
+            _fileIndexDirty = false;
+        }
         _activationGate.BeginShow();
         if (_input is not null) _input.Text = string.Empty;
         UpdateResults();
@@ -429,6 +486,7 @@ public sealed partial class App : Application
     {
         _stop.Cancel();
         _indexer?.Dispose();
+        _fileIndexer?.Dispose();
         _icons?.Dispose();
         _systemEvents?.Dispose();
         _hotkey?.Dispose();

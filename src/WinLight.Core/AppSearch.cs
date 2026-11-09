@@ -57,7 +57,7 @@ public sealed class AppSearch
         return top;
     }
 
-    private static int Match(string name, string query)
+    internal static int Match(string name, string query)
     {
         if (name.StartsWith(query, StringComparison.Ordinal)) return 100;
         int boundary = 0;

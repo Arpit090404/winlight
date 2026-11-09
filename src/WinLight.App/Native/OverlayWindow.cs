@@ -22,7 +22,10 @@ internal static unsafe class OverlayWindow
             presenter.IsMinimizable = false;
             presenter.IsAlwaysOnTop = true;
         }
-        window.AppWindow.IsShownInSwitchers = false;
+        // The native tool-window style below also hides this surface; some desktop
+        // sessions reject the WinAppSDK switcher setter during startup.
+        try { window.AppWindow.IsShownInSwitchers = false; }
+        catch (NotImplementedException error) { AppLog.Error("Hide launcher from task switcher", error); }
         window.SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
 
         HWND hwnd = new(WinRT.Interop.WindowNative.GetWindowHandle(window));
