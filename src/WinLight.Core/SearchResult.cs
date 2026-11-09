@@ -19,4 +19,5 @@ public abstract record ResultAction
     }
 
     public sealed record CopyText(string Text) : ResultAction;
+    public sealed record OpenFile(string Path, bool IsDirectory) : ResultAction;
 }

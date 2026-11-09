@@ -13,6 +13,9 @@ internal static class ResultActionExecutor
             case ResultAction.LaunchApp launch:
                 AppLauncher.Launch(launch.Item, asAdmin || launch.RunAsAdmin);
                 return;
+            case ResultAction.OpenFile file:
+                AppLauncher.OpenFile(file.Path, file.IsDirectory, asAdmin);
+                return;
             case ResultAction.CopyText copy:
                 var content = new DataPackage();
                 content.SetText(copy.Text);

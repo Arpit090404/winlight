@@ -1,5 +1,14 @@
 # WinLight reliability decisions
 
+## Filename search
+
+- FileSearchProvider is the third compiled-in provider, weighted below apps and calculator. It reuses the existing normalization and fuzzy matching categories, returns at most eight results, and reads an immutable in-memory array on queries. It searches names only, including subfolder names, and does no query-time filesystem work.
+- Only the current user's Downloads and Documents trees are scanned. Reparse-point directories and files are skipped to avoid following links out of scope. Paths are deduplicated case-insensitively; distinct same-name files remain distinct. Missing and inaccessible paths are logged and skipped.
+- File scanning starts after the existing app index finishes its first full refresh so it cannot compete with the app snapshot startup gate or first app search. A single below-normal-priority background worker owns full scans and watcher changes, then atomically publishes a new array. FileSystemWatcher events are batched and update only affected paths or subtrees. Buffer errors trigger a full reconcile and watcher recreation; a stale index also reconciles when the launcher is next shown after the existing app-index refresh interval. A missing root is watched from its parent so creation triggers a scan. No idle polling timer runs.
+- File entries share directory parent nodes rather than retaining a full path per file. Each searchable entry retains its name, normalized name, directory flag, and compact character mask; full paths are assembled only for selected results and watcher changes navigate the tree by path segments. The mask rejects names missing any query letter before fuzzy scoring. This keeps query work and retained strings lower on large Documents trees without changing match semantics.
+- File entries are not persisted. The existing snapshot is app-specific and the file tree changes more frequently; a second snapshot has no measured startup benefit yet and would add storage and stale-result handling. File search becomes available after its asynchronous scan, without delaying app or calculator startup.
+- File and folder actions use the closed ResultAction executor. Files open through their registered shell association; folders open in Explorer. Activation checks existence and uses the existing inline error path on failure.
+
 ## Compiled-in result providers
 
 - The app composes providers directly at startup. Providers return normalized 0–1 scores, support cancellable asynchronous queries, and carry closed result actions; v1 registers synchronous AppsProvider and CalculatorProvider with LaunchApp and CopyText actions.

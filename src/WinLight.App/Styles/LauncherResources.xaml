@@ -74,4 +74,30 @@
             </StackPanel>
         </Grid>
     </DataTemplate>
+
+    <DataTemplate x:Key="WinLightFileTemplate">
+        <Grid Height="48" AutomationProperties.Name="{Binding AccessibleName}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="32" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Tag="WinLightSelectionPill"
+                    Width="3" Height="24" Margin="8,0,0,0"
+                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                    CornerRadius="2" Visibility="Collapsed"
+                    Background="{ThemeResource AccentFillColorDefaultBrush}" />
+            <Image Grid.Column="1" Source="{Binding Icon}" Width="32" Height="32"
+                   VerticalAlignment="Center" Stretch="Uniform"
+                   AutomationProperties.AccessibilityView="Raw" />
+            <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Name}" Style="{ThemeResource BodyTextBlockStyle}"
+                           TextTrimming="CharacterEllipsis" AutomationProperties.AccessibilityView="Raw" />
+                <TextBlock Text="{Binding Subtitle}" Style="{ThemeResource CaptionTextBlockStyle}"
+                           TextTrimming="CharacterEllipsis" AutomationProperties.AccessibilityView="Raw" />
+            </StackPanel>
+        </Grid>
+    </DataTemplate>
 </ResourceDictionary>

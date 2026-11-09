@@ -11,6 +11,7 @@ Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `optimize
 **v1 (build only this):**
 - Global hotkey toggles a centered search window (default `Alt+Space`, configurable).
 - Search installed apps (classic Win32 and packaged/UWP/MSIX) by name, with fuzzy matching.
+- Search file and folder names under the current user's Downloads and Documents folders.
 - Evaluate complete arithmetic expressions inline and copy the selected result to the clipboard.
 - Rank results by match quality plus frecency (frequency and recency of past launches).
 - Keyboard: type to search, Up/Down to move, Enter to launch, Ctrl+Enter to launch as admin, Esc or focus loss to dismiss.
@@ -19,7 +20,6 @@ Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `optimize
 
 **Planned (do NOT build until asked; approach is decided when the phase starts):**
 - Pomodoro timer.
-- File search, limited to the Downloads and Documents folders.
 
 **Out of scope (do not add unless asked):** web search, clipboard history, plugins, telemetry, network access, auto-update, cloud anything.
 
@@ -179,4 +179,4 @@ A task is done when:
 
 ## Providers
 
-Providers are compiled into the app and registered in the plain App composition root. Return immediately and cheaply when a query is irrelevant; do no I/O on the query path. Honor cancellation tokens, and report scores normalized to 0–1 within each provider. Keep provider dependencies in constructors. v1 registers AppsProvider and CalculatorProvider only.
+Providers are compiled into the app and registered in the plain App composition root. Return immediately and cheaply when a query is irrelevant; do no I/O on the query path. Honor cancellation tokens, and report scores normalized to 0–1 within each provider. Keep provider dependencies in constructors. v1 registers AppsProvider, CalculatorProvider, and FileSearchProvider only.

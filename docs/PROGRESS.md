@@ -1,5 +1,12 @@
 # Progress
 
+## 2026-11-10 — Downloads and Documents filename search (performance follow-up pending)
+- Added a compiled-in file provider, shared-parent in-memory index, background watcher updates and reconciliation, file/folder shell actions, and a file row with icon and parent path; no new packages or query-time I/O.
+- Added isolated tests for matching, ranking, duplicates, nested trees, missing roots, watcher create/rename/move/delete, links, cancellation, and app/calculator priority. Release build has zero warnings and 153 tests pass; published desktop checks opened a Downloads text file and folder successfully.
+- BenchmarkDotNet measured 5,000-entry prefix search at 0.207 ms and 250,000-entry no-match at 1.427 ms before the final early-exit change. The machine's Downloads and Documents contain about 247,000 entries.
+- Final interactive Quick: snapshot hotkey p95 52.122 ms (<100), query max 20.497 ms (>16), snapshot readiness 1041.974 ms (>1000), idle CPU 0 (<0.1); 1/60 Notepad calibration misses. Private bytes after idle were 186.85 MB (informational in Quick). These results exceed the latest query/startup baseline; feature is not signed off.
+- A final worker-retry change passed `scripts/verify.ps1` again (153 tests, zero warnings); the subsequent Quick attempt exited before metric collection, so the preceding calibrated Quick remains the latest usable performance result. Next: isolate the first-query and snapshot-startup regressions under a controlled desktop load, measure the full 50-to-100-cycle private-byte gates, and rerun Quick before release.
+
 ## 2026-11-06 — Resident app scaffold
 - Created `WinLight.sln` with Core, App, Tests, and Benchmarks projects on .NET 10; the App is unpackaged and self-contained.
 - Added the pre-created hidden WinUI window, H.NotifyIcon tray icon, Alt+Space message-only hotkey window, single-instance mutex and named-pipe signal, and per-user login startup.
