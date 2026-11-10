@@ -26,8 +26,6 @@ internal static unsafe class OverlayWindow
         // sessions reject the WinAppSDK switcher setter during startup.
         try { window.AppWindow.IsShownInSwitchers = false; }
         catch (NotImplementedException error) { AppLog.Error("Hide launcher from task switcher", error); }
-        window.SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
-
         HWND hwnd = new(WinRT.Interop.WindowNative.GetWindowHandle(window));
         nint style = PInvoke.GetWindowLongPtr(hwnd, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
         style &= ~(nint)0x00C40000; // WS_CAPTION | WS_THICKFRAME
@@ -44,6 +42,7 @@ internal static unsafe class OverlayWindow
         int noBorder = unchecked((int)0xFFFFFFFE);
         result = PInvoke.DwmSetWindowAttribute(hwnd, DWMWINDOWATTRIBUTE.DWMWA_BORDER_COLOR, &noBorder, sizeof(int));
         if (result < 0) AppLog.Error("Remove DWM border", Marshal.GetExceptionForHR(result) ?? new Win32Exception(result));
+        window.SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
     }
 
     public static void Place(Window window, int logicalHeight)
@@ -65,6 +64,14 @@ internal static unsafe class OverlayWindow
         int x = work.X + (work.Width - width) / 2;
         int y = work.Y + work.Height / 5;
         window.AppWindow.MoveAndResize(new RectInt32(x, y, width, height));
+    }
+
+    public static void RestoreBackdrop(Window window)
+    {
+        // Hiding the pre-created window can leave its backdrop disconnected.
+        var backdrop = window.SystemBackdrop;
+        window.SystemBackdrop = null;
+        window.SystemBackdrop = backdrop;
     }
 
     public static void ResizeHeight(Window window, int logicalHeight)

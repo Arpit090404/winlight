@@ -405,6 +405,7 @@ public sealed partial class App : Application
         UpdateResults();
         OverlayWindow.Place(_window, _logicalHeight);
         _window.AppWindow.Show();
+        OverlayWindow.RestoreBackdrop(_window);
         if (PerfLog.Enabled) PerfLog.Point("window_show", $"visible={_window.AppWindow.IsVisible}");
         OverlayWindow.BringToForeground(_window);
         PostUi(() =>

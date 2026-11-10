@@ -1,5 +1,11 @@
 # Progress
 
+## 2026-11-10 — Native launcher backdrop restoration
+- The launcher already requested Desktop Acrylic, but assigned it before changing the native window frame; the published bar rendered as a uniform dark fill. The designer found no opaque XAML layer, and Windows transparency effects were enabled.
+- Moved the backdrop assignment after native style and DWM setup, then reconnected the same backdrop object after each show because hiding and reopening otherwise returned to the solid fallback.
+- Published Release build succeeded with zero warnings. Desktop captures showed the Acrylic surface on first open and after Esc/reopen; over the wallpaper it acquired a green tint instead of the old flat gray. Light and dark themes stayed readable, and the original dark setting was restored.
+- Window position, topmost presentation, rounded corners, and foreground focus were observed unchanged. Tests and performance scripts were not run for this focused visual fix.
+
 ## 2026-11-10 — Grouped search-result presentation
 - Kept the single selectable result list and its existing keyboard and launch actions; presentation now places app results above file and folder results while preserving order within each category.
 - Added first-result header metadata for the Apps and Files & Folders sections, with calculator results left headerless and in their existing order relative to apps.
