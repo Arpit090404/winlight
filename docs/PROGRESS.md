@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-11-10 — Direct Pomodoro controls and auto start
+- Replaced text actions with 36 px Fluent symbol buttons for start/pause, reset, and skip. Direct Focus, Short break, and Long break buttons sit beside them; three duration fields and an Auto start checkbox form the bottom settings row. The session and length dropdowns are gone.
+- Auto start is off by default and persists in `settings.json`. When enabled, a completed focus or break notifies once, then starts the recommended session from the time of completion or recovery; it does not backfill multiple sessions after downtime.
+- Published Release UI showed all controls and their accessible names in the embedded Focus section. Direct session buttons selected 5, 15, and 25 minute defaults. The checkbox persisted; recovery checks moved an overdue focus into a running short break and an overdue break into a running focus session. Test settings and session state were restored afterward.
+- Release build: 0 warnings, 0 errors; all 171 tests pass. Quick performance measurement remains outstanding because Antigravity scripter quota is unavailable; physical sleep/resume and drag checks remain manual.
+
+## 2026-11-10 — Embedded Pomodoro launcher controls
+- Moved full timer controls into a pre-created Focus section above ordinary search results. Three-character prefixes of `pomodoro` and `timer` reveal it without Enter; the separate full timer window was removed. Keyboard Enter activates the selected timer action, Up/Down can move between Focus and ordinary results, and Escape now dismisses from timer buttons as well as search input.
+- Refitted the panel to 260 px within the 640 px launcher, kept duration settings scrollable, and reduced the only popup to a 164×80 floating timer with transparent resting buttons, rounded native corners, and a drag region. The launcher repositions to keep the expanded panel on screen.
+- Published Release checks showed `tim` and `pom` opening Focus as the top section with one launcher window; Enter on `tim` started Focus and showed only the floating timer. Clicking it reopened embedded controls, and Esc left the floating timer running. Reset returned the session to Ready and hid the float.
+- Release build has zero warnings; all 171 tests pass, including prefix-trigger cases. Antigravity scripter remains unavailable due provider quota, so Quick performance budgets remain unmeasured for this change; physical drag and sleep/resume still need manual checks.
+
+## 2026-11-10 — Pomodoro focus timer
+- Added a Core deadline-based timer with focus, short-break and long-break progression, configurable durations, restart recovery, and deterministic state tests. Exact `pomodoro` and `timer` launcher commands open separate controls; active sessions use a dismissible floating window and the existing native tray notification.
+- Published Release checks exercised launcher access, focus start, pause/resume, launcher dismissal, floating reopen/dismiss, running-session restart recovery, and overdue completion with the next-break label. The floating view now announces completion and the recommended next session.
+- Release build: 0 warnings, 0 errors; all 163 tests pass, including 10 timer tests. No new packages were added.
+- Antigravity's read-only optimizer review confirmed deadline-based accuracy and hidden-window timer behavior. Its static-root and focus concerns do not imply repeated growth in the current one-window lifecycle; published keyboard handoff succeeded. Resume re-arming remains intentional to recalculate against the persisted UTC deadline after sleep. The scripter was blocked by provider quota, so `scripts/verify.ps1` and `scripts/perf.ps1 -Quick` have not run; CPU/memory impact is unmeasured. Physical sleep/resume, drag behavior, Narrator, and the visible tray notification still need desktop checks.
+
 ## 2026-11-10 — Native launcher backdrop restoration
 - The launcher already requested Desktop Acrylic, but assigned it before changing the native window frame; the published bar rendered as a uniform dark fill. The designer found no opaque XAML layer, and Windows transparency effects were enabled.
 - Moved the backdrop assignment after native style and DWM setup, then reconnected the same backdrop object after each show because hiding and reopening otherwise returned to the solid fallback.

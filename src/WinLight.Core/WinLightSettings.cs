@@ -48,4 +48,8 @@ public sealed record WinLightSettings
     public int Version { get; init; } = CurrentVersion;
     public HotkeyBinding Hotkey { get; init; } = HotkeyBinding.Default;
     public bool StartAtLogin { get; init; } = true;
+    public PomodoroDurations PomodoroDurations { get; init; } = new();
+    public PomodoroState? PomodoroState { get; init; }
+    public bool FloatingTimerDismissed { get; init; }
+    public bool AutoStartNextSession { get; init; }
 }

@@ -11,6 +11,7 @@ public sealed class SettingsStoreTests
         WinLightSettings settings = await SettingsStore.LoadAsync(path);
         Assert.Equal(HotkeyBinding.Default, settings.Hotkey);
         Assert.True(settings.StartAtLogin);
+        Assert.False(settings.AutoStartNextSession);
     }
 
     [Theory]
@@ -38,6 +39,8 @@ public sealed class SettingsStoreTests
             await File.WriteAllTextAsync(path,
                 "{\"app\":{\"Count\":3,\"LastLaunch\":\"2026-11-06T00:00:00+00:00\"}}");
             var settings = new WinLightSettings { StartAtLogin = false,
+                AutoStartNextSession = true,
+                PomodoroDurations = new PomodoroDurations(30, 7, 20),
                 Hotkey = new HotkeyBinding(HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x4B) };
             await SettingsStore.SaveAsync(path, settings);
             Dictionary<string, UsageRecord> usage = await UsageStore.LoadAsync(path);
@@ -46,6 +49,8 @@ public sealed class SettingsStoreTests
             await UsageStore.SaveAsync(path, usage);
             Assert.Equal(settings.Hotkey, (await SettingsStore.LoadAsync(path)).Hotkey);
             Assert.False((await SettingsStore.LoadAsync(path)).StartAtLogin);
+            Assert.True((await SettingsStore.LoadAsync(path)).AutoStartNextSession);
+            Assert.Equal(7, (await SettingsStore.LoadAsync(path)).PomodoroDurations.ShortBreakMinutes);
             Assert.Equal(4, (await UsageStore.LoadAsync(path))["app"].Count);
             Assert.False(File.Exists(path + ".tmp"));
         }

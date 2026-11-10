@@ -18,8 +18,8 @@ Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `optimize
 - Runs resident in the tray, starts at login, single instance.
 - Empty query shows only the search bar; the result list appears only once the user types.
 
-**Planned (do NOT build until asked; approach is decided when the phase starts):**
-- Pomodoro timer.
+**Implemented after v1:**
+- Pomodoro focus timer: typing `pom...` or `tim...` reveals embedded controls in the launcher; a dismissible floating timer tracks active sessions. An optional setting auto starts the recommended break or focus session after completion.
 
 **Out of scope (do not add unless asked):** web search, clipboard history, plugins, telemetry, network access, auto-update, cloud anything.
 
@@ -180,4 +180,4 @@ A task is done when:
 
 ## Providers
 
-Providers are compiled into the app and registered in the plain App composition root. Return immediately and cheaply when a query is irrelevant; do no I/O on the query path. Honor cancellation tokens, and report scores normalized to 0–1 within each provider. Keep provider dependencies in constructors. v1 registers AppsProvider, CalculatorProvider, and FileSearchProvider only.
+Providers are compiled into the app and registered in the plain App composition root. Return immediately and cheaply when a query is irrelevant; do no I/O on the query path. Honor cancellation tokens, and report scores normalized to 0–1 within each provider. Keep provider dependencies in constructors. Search registers AppsProvider, CalculatorProvider, and FileSearchProvider. Prefixes of `pomodoro` and `timer` from three characters reveal the built-in Focus section above provider results.

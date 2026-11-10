@@ -1,5 +1,12 @@
 # WinLight reliability decisions
 
+## Pomodoro focus timer
+
+- The launcher reveals an embedded Focus section for prefixes of `pomodoro` or `timer` from three characters, above ordinary provider results. The timer controls share the pre-created launcher window; only the compact, draggable timer is a separate window after a session starts. Dismissing it does not change timer state. This keeps app, file, and calculator provider rankings untouched and avoids a general command provider.
+- `PomodoroTimer` in Core owns one session and an injectable `TimeProvider`. A persisted UTC deadline is the source of truth while running. Pause captures the actual remaining duration; resume builds a new deadline. A one-shot completion wait serves hidden UI; a one-second dispatcher timer updates only visible timer windows. Resume events and opening controls reconcile against the deadline, so delayed callbacks and sleep cannot accumulate countdown drift.
+- Completing focus increments its count and offers a short break, except that every fourth completed focus offers a long break. Completing a long break resets the count. Completing any break offers focus. Skips do not credit completion. Auto start is an opt-in single setting, off by default, that starts the recommended break or focus session after a completion; recovery from an overdue deadline starts the next session from the time of recovery rather than silently catching up multiple sessions.
+- Durations, state, completion identifier, and floating-dismiss preference use the existing atomic `settings.json` document. A recovered running session reconciles immediately against its deadline. The completion identifier prevents repeated tray balloon notifications for the same completion. H.NotifyIcon's existing native tray notification is used for completion; no notification package was added.
+
 ## Filename search
 
 - FileSearchProvider is the third compiled-in provider, weighted below apps and calculator. It reuses the existing normalization and fuzzy matching categories, returns at most eight results, and reads an immutable in-memory array on queries. It searches names only, including subfolder names, and does no query-time filesystem work.

@@ -62,7 +62,8 @@ internal static unsafe class OverlayWindow
         int height = (int)Math.Round(logicalHeight * scale);
         RectInt32 work = area.WorkArea;
         int x = work.X + (work.Width - width) / 2;
-        int y = work.Y + work.Height / 5;
+        int y = Math.Min(work.Y + work.Height / 5,
+            work.Y + Math.Max(0, work.Height - height));
         window.AppWindow.MoveAndResize(new RectInt32(x, y, width, height));
     }
 

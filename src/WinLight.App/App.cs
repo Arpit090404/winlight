@@ -30,6 +30,8 @@ public sealed partial class App : Application
     private Window? _window;
     private TextBox? _input;
     private ListView? _results;
+    private FrameworkElement? _pomodoroPanel;
+    private bool _timerLayoutChanged;
     private TextBlock? _error;
     private TaskbarIcon? _tray;
     private HotkeyWindow? _hotkey;
@@ -108,6 +110,17 @@ public sealed partial class App : Application
         panel.Children.Add(_results);
         panel.Children.Add(_error);
         ConfigureVisuals(panel, _input, _results, _error, _viewModel);
+        _pomodoroPanel = (FrameworkElement)PomodoroVisuals.CreateControls(_pomodoroViewModel,
+            SelectPomodoro, StartPausePomodoro, ResetPomodoro, SkipPomodoro,
+            ConfigurePomodoro, ConfigurePomodoroAutoStart);
+        _pomodoroPanel.Visibility = Visibility.Collapsed;
+        panel.Children.Insert(2, _pomodoroPanel);
+        panel.KeyDown += (_, e) =>
+        {
+            if (e.Key != VirtualKey.Escape || !_showing) return;
+            Hide();
+            e.Handled = true;
+        };
         ResourceDictionary templates = panel.Resources.MergedDictionaries[0];
         _results.ItemTemplate = null;
         _results.ItemTemplateSelector = new ResultTemplateSelector(
@@ -274,6 +287,14 @@ public sealed partial class App : Application
     private void UpdateResults(long perfStart = 0)
     {
         if (_input is null || _results is null || _window is null) return;
+        bool focusVisible = PomodoroQuery.IsMatch(_input.Text);
+        if (_pomodoroPanel is not null)
+        {
+            _timerLayoutChanged |= (_pomodoroPanel.Visibility == Visibility.Visible) != focusVisible;
+            _pomodoroPanel.Visibility = focusVisible ? Visibility.Visible : Visibility.Collapsed;
+        }
+        _pomodoroViewModel.IsKeyboardSelected = focusVisible;
+        SyncPomodoroDisplayTimer();
         _viewModel.SetQuery(_input.Text);
         long queryId = ++_resultQueryId;
         if (!_viewModel.IsResultsVisible)
@@ -322,16 +343,21 @@ public sealed partial class App : Application
         }
         _results.Visibility = _viewModel.IsResultsVisible ? Visibility.Visible : Visibility.Collapsed;
         if (DiagnosticLog.Enabled) DiagnosticLog.Write($"ListView ItemsSource count: {matches.Count}");
-        _results.SelectedIndex = matches.Count == 0 ? -1 : 0;
-        int listHeight = Math.Min(384, matches.Count * 48 +
+        _results.SelectedIndex = matches.Count == 0 || _pomodoroViewModel.IsKeyboardSelected ? -1 : 0;
+        int listHeight = Math.Min(_pomodoroPanel?.Visibility == Visibility.Visible ? 220 : 384, matches.Count * 48 +
             (appHeaderShown ? SectionHeaderHeight : 0) + (fileHeaderShown ? SectionHeaderHeight : 0));
         _results.Height = listHeight;
-        int logicalHeight = 56 + listHeight + (_error?.Visibility == Visibility.Visible ? 32 : 0);
+        int logicalHeight = 56 + (_pomodoroPanel?.Visibility == Visibility.Visible
+            ? PomodoroVisuals.ControlsHeight : 0) + listHeight +
+            (_error?.Visibility == Visibility.Visible ? 32 : 0);
         if (logicalHeight != _logicalHeight)
         {
             _logicalHeight = logicalHeight;
-            OverlayWindow.ResizeHeight(_window, logicalHeight);
+            if (_pomodoroPanel?.Visibility == Visibility.Visible || _timerLayoutChanged)
+                OverlayWindow.Place(_window, logicalHeight);
+            else OverlayWindow.ResizeHeight(_window, logicalHeight);
         }
+        _timerLayoutChanged = false;
         if (PerfLog.Enabled && perfStart != 0)
             PerfLog.Record("query_update", perfStart, $"query={_input.Text.Replace('|', ' ')};results={matches.Count};index={_search.Count}");
     }
@@ -437,6 +463,7 @@ public sealed partial class App : Application
             CompositionTarget.Rendering -= OnFirstRenderedFrame;
         }
         _window?.AppWindow.Hide();
+        SyncPomodoroDisplayTimer();
     }
 
     private async Task ExecuteResultAsync(SearchResult result)
@@ -476,12 +503,27 @@ public sealed partial class App : Application
         if (e.Key == VirtualKey.Escape) { Hide(); e.Handled = true; }
         else if (e.Key == VirtualKey.Down && _results is not null && _results.Items.Count > 0)
         {
-            _results.SelectedIndex = Math.Min(_results.SelectedIndex + 1, _results.Items.Count - 1);
+            if (_pomodoroViewModel.IsKeyboardSelected)
+            {
+                _pomodoroViewModel.IsKeyboardSelected = false;
+                _results.SelectedIndex = 0;
+            }
+            else _results.SelectedIndex = Math.Min(_results.SelectedIndex + 1, _results.Items.Count - 1);
             e.Handled = true;
         }
         else if (e.Key == VirtualKey.Up && _results is not null && _results.Items.Count > 0)
         {
-            _results.SelectedIndex = Math.Max(_results.SelectedIndex - 1, 0);
+            if (_pomodoroPanel?.Visibility == Visibility.Visible && _results.SelectedIndex <= 0)
+            {
+                _results.SelectedIndex = -1;
+                _pomodoroViewModel.IsKeyboardSelected = true;
+            }
+            else _results.SelectedIndex = Math.Max(_results.SelectedIndex - 1, 0);
+            e.Handled = true;
+        }
+        else if (e.Key == VirtualKey.Enter && _pomodoroViewModel.IsKeyboardSelected)
+        {
+            StartPausePomodoro();
             e.Handled = true;
         }
         else if (e.Key == VirtualKey.Enter && _results?.SelectedItem is AppResultViewModel item)
@@ -503,9 +545,12 @@ public sealed partial class App : Application
 
     private static unsafe nint ForegroundWindowHandle() => (nint)PInvoke.GetForegroundWindow().Value;
 
-    private void ExitApp()
+    private async void ExitApp()
     {
+        await SaveSettingsAsync();
         _stop.Cancel();
+        StopPomodoroDisplayTimer();
+        _pomodoroDeadline?.Cancel();
         _indexer?.Dispose();
         _fileIndexer?.Dispose();
         _icons?.Dispose();

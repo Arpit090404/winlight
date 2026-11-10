@@ -28,6 +28,7 @@ public sealed partial class App
             PostUi(() =>
             {
                 _settings = settings;
+                InitializePomodoro(settings);
                 if (Environment.GetEnvironmentVariable("WINLIGHT_TEST_HOTKEY_CONFLICT") == "1")
                 {
                     bool held = _systemEvents?.HoldDefaultHotkeyForTest() == true;
@@ -201,6 +202,8 @@ public sealed partial class App
     private void OnSessionResumed(string reason)
     {
         if (PerfLog.Enabled) PerfLog.Point("session_resume", $"reason={reason}");
+        ReconcilePomodoro();
+        SchedulePomodoroDeadline();
         try
         {
             bool registered = _hotkey?.Restore() == true;
