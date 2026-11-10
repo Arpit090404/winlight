@@ -25,6 +25,7 @@ public sealed partial class App : Application
     private readonly FileSearchProvider _files = new();
     private readonly SearchEngine _engine;
     private readonly LauncherViewModel _viewModel = new();
+    private readonly LauncherNavigationState _navigation = new();
     private readonly ObservableCollection<AppResultViewModel> _visibleResults = [];
     private readonly Dictionary<string, AppResultViewModel> _resultCache = new(StringComparer.OrdinalIgnoreCase);
     private Window? _window;
@@ -48,13 +49,18 @@ public sealed partial class App : Application
     private DateTimeOffset _lastIndexed;
     private DateTimeOffset _lastFilesReconciled = DateTimeOffset.UtcNow;
     private int _logicalHeight = 56;
+    private int _searchHeight = 56;
+    private bool _searchResultsDirty;
+    private bool _restoringSearchQuery;
+    private Visibility _searchErrorVisibility = Visibility.Collapsed;
+    private const int SettingsHeight = 416;
     private long _pendingHotkeyFrame;
     private int _hideCount;
     private long _resultQueryId;
     private const int SectionHeaderHeight = 28;
 
     partial void ConfigureVisuals(StackPanel root, TextBox input, ListView results,
-        TextBlock error, LauncherViewModel viewModel);
+        TextBlock error, LauncherViewModel viewModel, Action openSettings);
 
     public App()
     {
@@ -85,6 +91,21 @@ public sealed partial class App : Application
         _input.KeyDown += OnInputKeyDown;
         _input.TextChanged += (_, _) =>
         {
+            if (_restoringSearchQuery) return;
+            if (_navigation.IsSettingsOpen)
+            {
+                _navigation.SearchTextChanged(_input.Text);
+                _navigation.RecordSearchQuery(_input.Text);
+                _searchResultsDirty = true;
+                RestoreSearchContent();
+                return;
+            }
+            else if (string.Equals(_input.Text.Trim(), "settings", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowSettings(fromQuery: true);
+                return;
+            }
+            _navigation.RecordSearchQuery(_input.Text);
             if (PerfLog.Enabled) LogInputState("text_changed");
             long stamp = PerfLog.Enabled ? Stopwatch.GetTimestamp() : 0;
             UpdateResults(stamp);
@@ -109,7 +130,8 @@ public sealed partial class App : Application
         panel.Children.Add(_input);
         panel.Children.Add(_results);
         panel.Children.Add(_error);
-        ConfigureVisuals(panel, _input, _results, _error, _viewModel);
+        ConfigureVisuals(panel, _input, _results, _error, _viewModel, ShowSettings);
+        InitializeSettingsContent(panel);
         _pomodoroPanel = (FrameworkElement)PomodoroVisuals.CreateControls(_pomodoroViewModel,
             SelectPomodoro, StartPausePomodoro, ResetPomodoro, SkipPomodoro,
             ConfigurePomodoro, ConfigurePomodoroAutoStart);
@@ -118,7 +140,8 @@ public sealed partial class App : Application
         panel.KeyDown += (_, e) =>
         {
             if (e.Key != VirtualKey.Escape || !_showing) return;
-            Hide();
+            if (_navigation.IsSettingsOpen) ReturnToSearch();
+            else Hide();
             e.Handled = true;
         };
         ResourceDictionary templates = panel.Resources.MergedDictionaries[0];
@@ -144,7 +167,11 @@ public sealed partial class App : Application
             }
             else if (_showing)
             {
-                PostUi(() => _input?.Focus(FocusState.Programmatic));
+                PostUi(() =>
+                {
+                    if (_navigation.IsSettingsOpen) FocusSettingsNavigation();
+                    else _input?.Focus(FocusState.Programmatic);
+                });
             }
         };
         _window.AppWindow.Hide();
@@ -287,6 +314,11 @@ public sealed partial class App : Application
     private void UpdateResults(long perfStart = 0)
     {
         if (_input is null || _results is null || _window is null) return;
+        if (_navigation.IsSettingsOpen)
+        {
+            _searchResultsDirty = true;
+            return;
+        }
         bool focusVisible = PomodoroQuery.IsMatch(_input.Text);
         if (_pomodoroPanel is not null)
         {
@@ -324,6 +356,11 @@ public sealed partial class App : Application
     private void ApplyResults(IReadOnlyList<SearchResult> matches, long perfStart)
     {
         if (_input is null || _results is null || _window is null) return;
+        if (_navigation.IsSettingsOpen)
+        {
+            _searchResultsDirty = true;
+            return;
+        }
         if (DiagnosticLog.Enabled) DiagnosticLog.Write($"Query: '{_input.Text}', results: {matches.Count}");
         _visibleResults.Clear();
         bool appHeaderShown = false;
@@ -353,6 +390,7 @@ public sealed partial class App : Application
         if (logicalHeight != _logicalHeight)
         {
             _logicalHeight = logicalHeight;
+            _searchHeight = logicalHeight;
             if (_pomodoroPanel?.Visibility == Visibility.Visible || _timerLayoutChanged)
                 OverlayWindow.Place(_window, logicalHeight);
             else OverlayWindow.ResizeHeight(_window, logicalHeight);
@@ -410,6 +448,7 @@ public sealed partial class App : Application
     private void Show()
     {
         if (_window is null) return;
+        if (_navigation.IsSettingsOpen) ReturnToSearch(restoreQuery: false, focusSearch: false);
         if (_hasIndex && DateTimeOffset.UtcNow - _lastIndexed >= TimeSpan.FromMinutes(15))
         {
             _lastIndexed = DateTimeOffset.UtcNow;
@@ -450,6 +489,7 @@ public sealed partial class App : Application
     {
         if (PerfLog.Enabled) PerfLog.Point("window_hide", $"visible_before={_window?.AppWindow.IsVisible}");
         _showing = false;
+        if (_navigation.IsSettingsOpen) ReturnToSearch(restoreQuery: false, focusSearch: false);
         if (PerfLog.Enabled && ++_hideCount % 500 == 0)
         {
             using Process process = Process.GetCurrentProcess();
@@ -500,6 +540,11 @@ public sealed partial class App : Application
     private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (PerfLog.Enabled) LogInputState($"key_down_{e.Key}");
+        if (_navigation.IsSettingsOpen)
+        {
+            if (e.Key == VirtualKey.Escape) { ReturnToSearch(); e.Handled = true; }
+            return;
+        }
         if (e.Key == VirtualKey.Escape) { Hide(); e.Handled = true; }
         else if (e.Key == VirtualKey.Down && _results is not null && _results.Items.Count > 0)
         {

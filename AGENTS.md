@@ -14,9 +14,10 @@ Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `optimize
 - Search file and folder names under the current user's Downloads and Documents folders.
 - Evaluate complete arithmetic expressions inline and copy the selected result to the clipboard.
 - Rank results by match quality plus frecency (frequency and recency of past launches).
-- Keyboard: type to search, Up/Down to move, Enter to launch, Ctrl+Enter to launch as admin, Esc or focus loss to dismiss.
+- Keyboard: type to search, Up/Down to move, Enter to launch, Ctrl+Enter to launch as admin, Esc from Search or focus loss to dismiss. In Settings, Esc returns to Search.
 - Runs resident in the tray, starts at login, single instance.
 - Empty query shows only the search bar; the result list appears only once the user types.
+- Settings shares the pre-created launcher window: the search bar stays visible, and the gear button or `settings` query replaces results with categorized settings. Escape returns to Search from Settings; Escape at the Search root dismisses the launcher.
 
 **Implemented after v1:**
 - Pomodoro focus timer: typing `pom...` or `tim...` reveals embedded controls in the launcher; a dismissible floating timer tracks active sessions. An optional setting auto starts the recommended break or focus session after completion.
@@ -85,7 +86,7 @@ After each phase, append 3–5 lines to `docs/PROGRESS.md`: what changed, what w
 ## 5. Architecture requirements
 
 1. **Resident process.** The app starts at login (per-user `HKCU\...\Run` entry, not a scheduled task, no admin) and lives in the tray. Single instance via a named mutex; a second launch signals the first (named pipe) to show the window, then exits.
-2. **Pre-created window.** Create the search window once at startup, hidden and fully laid out. Showing it must not construct UI, allocate large objects, or touch disk. Hide on Esc, Enter (after launch), and loss of focus.
+2. **Pre-created window.** Create the launcher once at startup, hidden and fully laid out, with Search and Settings content in the same window. Showing it must not construct UI, allocate large objects, or touch disk. Hide on Esc from Search, Enter (after launch), and loss of focus.
 3. **Global hotkey** via `RegisterHotKey` on a message-only window. Handle registration failure (hotkey taken) with a visible tray notification and a settings fallback; never crash or silently fail.
 4. **App index.** Enumerate the `shell:AppsFolder` virtual folder (covers both classic and packaged apps, with AppUserModelIDs). Also scan both Start Menu `Programs` folders (all-users and per-user) for `.lnk`. De-duplicate by target/AUMID. Build the index off the UI thread at startup, keep it in memory, and refresh incrementally with `FileSystemWatcher` (debounced) plus a periodic cheap reconcile. Never block hotkey response on indexing.
 5. **Launching.** Launch via `ShellExecuteEx` with the item's parsed path or `shell:AppsFolder\<AUMID>`. Support run-as-admin (Ctrl+Enter). Launch failures must show an inline message, never an unhandled exception.

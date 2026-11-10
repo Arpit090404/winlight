@@ -1,5 +1,13 @@
 # Progress
 
+## 2026-11-10 — Integrated launcher Settings
+- Hosted the existing hotkey, login startup, and app rescan controls inside the pre-created launcher below its search bar; the tray and hotkey-conflict routes now enter that view.
+- Added gear and `settings` query entry, Search return and Escape behavior, a General/Apps sidebar, and query/result preservation across view switches.
+- Kept the single settings model and atomic store, existing launcher backdrop/window configuration, and normal search keyboard handling. A focused navigation-state integration test was added.
+- Final Release build succeeded with zero warnings; the one focused xUnit navigation test passed (1/1). No full suite or performance benchmark was run, as requested.
+- Published desktop flow verified gear and query entry, General/Apps navigation, login-toggle persistence and restoration, Back/Escape query and result restoration, new-query return to Search, and root Escape dismissal. UI Automation found one WinLight top-level window while Settings was open.
+- Dark and light desktop captures showed themed controls, the native Acrylic surface, and rounded launcher corners. The focused xUnit test covers navigation state; the WinUI interaction, theme, and backdrop checks were manual. Search Up/Down/Enter could not be independently driven by the desktop automation because another foreground app reclaimed keyboard focus.
+
 ## 2026-11-10 — Direct Pomodoro controls and auto start
 - Replaced text actions with 36 px Fluent symbol buttons for start/pause, reset, and skip. Direct Focus, Short break, and Long break buttons sit beside them; three duration fields and an Auto start checkbox form the bottom settings row. The session and length dropdowns are gone.
 - Auto start is off by default and persists in `settings.json`. When enabled, a completed focus or break notifies once, then starts the recommended session from the time of completion or recovery; it does not backfill multiple sessions after downtime.

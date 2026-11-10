@@ -1,5 +1,11 @@
 # WinLight reliability decisions
 
+## Integrated launcher Settings
+
+- Settings uses the launcher's existing pre-created window and native Acrylic/DWM treatment. Search and Settings are content modes below the same search bar; the tray entry and hotkey-conflict fallback enter that mode rather than creating a second Settings window.
+- The existing `WinLightSettings` state, `SettingsStore`, hotkey validation and registration, login startup handler, and app-rescan action remain authoritative. The sidebar groups those existing controls without adding stored settings or dependencies.
+- Entering Settings remembers the current search query and visible results. Leaving via Back or Escape restores that state when the query has not changed; editing the search field starts a fresh search. Escape from Search retains its dismiss behavior.
+
 ## Pomodoro focus timer
 
 - The launcher reveals an embedded Focus section for prefixes of `pomodoro` or `timer` from three characters, above ordinary provider results. The timer controls share the pre-created launcher window; only the compact, draggable timer is a separate window after a session starts. Dismissing it does not change timer state. This keeps app, file, and calculator provider rankings untouched and avoids a general command provider.

@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.Win32;
+using WinLight.App.Native;
 using WinLight.Core;
 using Windows.System;
 using Windows.UI.Core;
@@ -11,13 +12,14 @@ namespace WinLight.App;
 public sealed partial class App
 {
     private WinLightSettings _settings = new();
-    private Window? _settingsWindow;
+    private StackPanel? _settingsPanel;
     private TextBox? _hotkeyCapture;
     private ToggleSwitch? _startupToggle;
     private TextBlock? _settingsMessage;
 
     partial void ConfigureSettingsVisuals(StackPanel root, TextBox hotkeyCapture,
-        ToggleSwitch startupToggle, Button rescanButton, TextBlock message);
+        ToggleSwitch startupToggle, Button rescanButton, TextBlock message, Action returnToSearch);
+    private partial void FocusSettingsNavigation();
 
     private async Task LoadSettingsAndRegisterAsync()
     {
@@ -67,65 +69,110 @@ public sealed partial class App
         }
     }
 
-    private void ShowSettings()
+    private void InitializeSettingsContent(StackPanel launcher)
     {
-        if (PerfLog.Enabled) PerfLog.Point("settings_show_begin",
-            $"created={_settingsWindow is not null};thread={Environment.CurrentManagedThreadId}");
-        if (_settingsWindow is null)
+        _hotkeyCapture = new TextBox
         {
-            _hotkeyCapture = new TextBox
-            {
-                Header = "Hotkey (press a new combination)",
-                Text = _settings.Hotkey.ToString(),
-                IsReadOnly = true
-            };
-            _hotkeyCapture.Loaded += (_, _) => PostUi(() => _hotkeyCapture?.Focus(FocusState.Keyboard));
-            _hotkeyCapture.KeyDown += OnHotkeyCapture;
-            _startupToggle = new ToggleSwitch
-            {
-                Header = "Start at login", IsOn = _settings.StartAtLogin
-            };
-            _startupToggle.Toggled += OnStartupToggled;
-            var rescan = new Button { Content = "Rescan apps" };
-            rescan.Click += (_, _) =>
-            {
-                _indexer?.Refresh();
-                SetSettingsMessage("Rescanning apps in the background.");
-            };
-            _settingsMessage = new TextBlock { TextWrapping = TextWrapping.Wrap };
-            var root = new StackPanel { Spacing = 12, Padding = new Thickness(16) };
-            root.Children.Add(_hotkeyCapture);
-            root.Children.Add(_startupToggle);
-            root.Children.Add(rescan);
-            root.Children.Add(_settingsMessage);
-            ConfigureSettingsVisuals(root, _hotkeyCapture, _startupToggle, rescan, _settingsMessage);
-            if (PerfLog.Enabled) PerfLog.Point("settings_visuals_ready", "created=true");
-            _settingsWindow = new Window { Title = "WinLight Settings", Content = root };
-            _settingsWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(440, 260));
-            _settingsWindow.Activated += (_, e) =>
-            {
-                if (e.WindowActivationState != WindowActivationState.Deactivated)
-                    PostUi(() => _hotkeyCapture?.Focus(FocusState.Programmatic));
-            };
-            _settingsWindow.AppWindow.Closing += (_, e) =>
-            {
-                e.Cancel = true;
-                _settingsWindow.AppWindow.Hide();
-            };
-        }
+            Header = "Hotkey (press a new combination)",
+            Text = _settings.Hotkey.ToString(),
+            IsReadOnly = true
+        };
+        _hotkeyCapture.KeyDown += OnHotkeyCapture;
+        _startupToggle = new ToggleSwitch
+        {
+            Header = "Start at login", IsOn = _settings.StartAtLogin
+        };
+        _startupToggle.Toggled += OnStartupToggled;
+        var rescan = new Button { Content = "Rescan apps" };
+        rescan.Click += (_, _) =>
+        {
+            _indexer?.Refresh();
+            SetSettingsMessage("Rescanning apps in the background.");
+        };
+        _settingsMessage = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        _settingsPanel = new StackPanel { Visibility = Visibility.Collapsed };
+        _settingsPanel.Children.Add(_hotkeyCapture);
+        _settingsPanel.Children.Add(_startupToggle);
+        _settingsPanel.Children.Add(rescan);
+        _settingsPanel.Children.Add(_settingsMessage);
+        ConfigureSettingsVisuals(_settingsPanel, _hotkeyCapture, _startupToggle, rescan,
+            _settingsMessage, ReturnToSearch);
+        launcher.Children.Insert(2, _settingsPanel);
+    }
+
+    private void ShowSettings() => ShowSettings(fromQuery: false);
+
+    private void ShowSettings(bool fromQuery)
+    {
+        if (_settingsPanel is null || _input is null || _window is null) return;
+        if (!_showing) Show();
+        if (_navigation.IsSettingsOpen) return;
+        if (PerfLog.Enabled) PerfLog.Point("settings_show_begin",
+            $"thread={Environment.CurrentManagedThreadId}");
+        _navigation.EnterSettings(_input.Text, fromQuery);
         _hotkeyCapture!.Text = _settings.Hotkey.ToString();
         _startupToggle!.IsOn = _settings.StartAtLogin;
-        _settingsWindow.AppWindow.Show();
-        _settingsWindow.Activate();
+        if (_error is not null) _searchErrorVisibility = _error.Visibility;
+        ++_resultQueryId;
+        _engine.CancelCurrentQuery();
+        if (_results is not null) _results.Visibility = Visibility.Collapsed;
+        if (_pomodoroPanel is not null) _pomodoroPanel.Visibility = Visibility.Collapsed;
+        if (_error is not null) _error.Visibility = Visibility.Collapsed;
+        SyncPomodoroDisplayTimer();
+        _settingsPanel.Visibility = Visibility.Visible;
+        _logicalHeight = SettingsHeight;
+        OverlayWindow.Place(_window, SettingsHeight);
         if (PerfLog.Enabled) PerfLog.Point("settings_show_end",
-            $"visible={_settingsWindow.AppWindow.IsVisible};thread={Environment.CurrentManagedThreadId}");
-        PostUi(() => _hotkeyCapture.Focus(FocusState.Programmatic));
+            $"visible={_window.AppWindow.IsVisible};thread={Environment.CurrentManagedThreadId}");
+        PostUi(() =>
+        {
+            if (_showing && _navigation.IsSettingsOpen) FocusSettingsNavigation();
+        });
+    }
+
+    private void ReturnToSearch() => ReturnToSearch(restoreQuery: true, focusSearch: true);
+
+    private void ReturnToSearch(bool restoreQuery, bool focusSearch)
+    {
+        if (!_navigation.IsSettingsOpen || _input is null || _window is null) return;
+        string query = _navigation.ReturnToSearch();
+        if (restoreQuery && _input.Text != query)
+        {
+            _restoringSearchQuery = true;
+            try { _input.Text = query; }
+            finally { _restoringSearchQuery = false; }
+            _searchResultsDirty = true;
+        }
+        if (_settingsPanel is not null) _settingsPanel.Visibility = Visibility.Collapsed;
+        RestoreSearchContent();
+        if (focusSearch) PostUi(() => _input.Focus(FocusState.Programmatic));
+    }
+
+    private void RestoreSearchContent()
+    {
+        if (_navigation.IsSettingsOpen || _input is null || _window is null) return;
+        if (_settingsPanel is not null) _settingsPanel.Visibility = Visibility.Collapsed;
+        if (_results is not null)
+            _results.Visibility = _viewModel.IsResultsVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (_error is not null) _error.Visibility = _searchErrorVisibility;
+        if (_pomodoroPanel is not null)
+            _pomodoroPanel.Visibility = PomodoroQuery.IsMatch(_input.Text)
+                ? Visibility.Visible : Visibility.Collapsed;
+        _logicalHeight = _searchHeight;
+        OverlayWindow.Place(_window, _searchHeight);
+        SyncPomodoroDisplayTimer();
+        if (_searchResultsDirty)
+        {
+            _searchResultsDirty = false;
+            UpdateResults();
+        }
     }
 
     private void OnHotkeyCapture(object sender, KeyRoutedEventArgs args)
     {
         if (PerfLog.Enabled) PerfLog.Point("settings_key_down",
             $"key={args.Key};focus={_hotkeyCapture?.FocusState}");
+        if (args.Key == VirtualKey.Escape) return;
         int key = (int)args.Key;
         if (key is 0x09 or 0x10 or 0x11 or 0x12 or 0x5B or 0x5C) return;
         HotkeyModifiers modifiers = HotkeyModifiers.None;
@@ -225,7 +272,7 @@ public sealed partial class App
         ShowSettings();
         SetSettingsMessage(message);
         if (PerfLog.Enabled) PerfLog.Point("hotkey_conflict_fallback",
-            $"settings_visible={_settingsWindow?.AppWindow.IsVisible};tray_created={_tray?.IsCreated}");
+            $"settings_visible={_navigation.IsSettingsOpen && _window?.AppWindow.IsVisible == true};tray_created={_tray?.IsCreated}");
     }
 
     private void SetSettingsMessage(string message)

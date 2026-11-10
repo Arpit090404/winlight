@@ -14,7 +14,7 @@ public sealed partial class App
     private Storyboard? _resultsFade;
 
     partial void ConfigureVisuals(StackPanel root, TextBox input, ListView results,
-        TextBlock error, LauncherViewModel viewModel)
+        TextBlock error, LauncherViewModel viewModel, Action openSettings)
     {
         var resources = new ResourceDictionary
         {
@@ -35,7 +35,7 @@ public sealed partial class App
         input.PlaceholderText = "Search apps";
         input.VerticalAlignment = VerticalAlignment.Center;
         input.HorizontalAlignment = HorizontalAlignment.Stretch;
-        input.Margin = new Thickness(52, 0, 16, 0);
+        input.Margin = new Thickness(52, 0, 56, 0);
         AutomationProperties.SetName(input, "Search apps");
 
         var searchBar = new Grid { Height = 56 };
@@ -51,6 +51,28 @@ public sealed partial class App
         };
         searchBar.Children.Add(glyph);
         searchBar.Children.Add(input);
+        var settingsButton = new Button
+        {
+            Content = new FontIcon
+            {
+                Glyph = "\uE713",
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontSize = 18
+            },
+            Width = 40,
+            Height = 40,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 8, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = transparent,
+            BorderThickness = new Thickness(0),
+            UseSystemFocusVisuals = true
+        };
+        AutomationProperties.SetName(settingsButton, "Open Settings");
+        ToolTipService.SetToolTip(settingsButton, "Settings");
+        settingsButton.Click += (_, _) => openSettings();
+        searchBar.Children.Add(settingsButton);
 
         results.DisplayMemberPath = string.Empty;
         results.ItemTemplate = (DataTemplate)resources["WinLightResultTemplate"];
