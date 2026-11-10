@@ -19,6 +19,7 @@ public static class SettingsStore
     public static async Task SaveAsync(string path, WinLightSettings settings, CancellationToken stop = default)
     {
         if (!settings.Hotkey.IsValid(out string reason)) throw new ArgumentException(reason, nameof(settings));
+        if (!settings.PomodoroDurations.IsValid) throw new ArgumentException("Invalid Pomodoro durations.", nameof(settings));
         await Gate.WaitAsync(stop).ConfigureAwait(false);
         try
         {
@@ -61,7 +62,12 @@ public static class SettingsStore
             return new SettingsDocument(new WinLightSettings
             {
                 Hotkey = stored.Hotkey,
-                StartAtLogin = stored.StartAtLogin
+                StartAtLogin = stored.StartAtLogin,
+                PomodoroDurations = stored.PomodoroDurations is { IsValid: true }
+                    ? stored.PomodoroDurations : new PomodoroDurations(),
+                PomodoroState = stored.PomodoroState,
+                FloatingTimerDismissed = stored.FloatingTimerDismissed,
+                AutoStartNextSession = stored.AutoStartNextSession
             }, stored.Usage ?? []);
         }
         catch (Exception error) when (error is JsonException or IOException or UnauthorizedAccessException)
@@ -79,7 +85,10 @@ public static class SettingsStore
             {
                 await JsonSerializer.SerializeAsync(stream, new StoredDocument(
                     document.Settings.Version, document.Settings.Hotkey,
-                    document.Settings.StartAtLogin, document.Usage), JsonOptions, stop).ConfigureAwait(false);
+                    document.Settings.StartAtLogin, document.Usage,
+                    document.Settings.PomodoroDurations, document.Settings.PomodoroState,
+                    document.Settings.FloatingTimerDismissed,
+                    document.Settings.AutoStartNextSession), JsonOptions, stop).ConfigureAwait(false);
                 await stream.FlushAsync(stop).ConfigureAwait(false);
             }
             if (File.Exists(path)) File.Replace(temporary, path, null);
@@ -94,5 +103,7 @@ public static class SettingsStore
     }
 
     private sealed record StoredDocument(int Version, HotkeyBinding Hotkey, bool StartAtLogin,
-        Dictionary<string, UsageRecord>? Usage);
+        Dictionary<string, UsageRecord>? Usage, PomodoroDurations? PomodoroDurations,
+        PomodoroState? PomodoroState, bool FloatingTimerDismissed,
+        bool AutoStartNextSession);
 }
