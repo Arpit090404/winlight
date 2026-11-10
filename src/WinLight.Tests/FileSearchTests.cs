@@ -102,6 +102,31 @@ public sealed class FileSearchTests
     }
 
     [Fact]
+    public async Task IndexesDocumentFilesAndAllFoldersButSkipsOtherFileTypes()
+    {
+        using var area = new TempArea();
+        string downloads = area.CreateDirectory("Downloads");
+        string folder = Directory.CreateDirectory(Path.Combine(downloads, "Scripts")).FullName;
+        string[] allowed = [".docx", ".pdf", ".xls", ".xlsx", ".xlsm", ".xlsb",
+            ".md", ".txt", ".ppt", ".pptx"];
+        foreach (string extension in allowed)
+            File.WriteAllText(Path.Combine(downloads, "findme" + extension), "x");
+        File.WriteAllText(Path.Combine(downloads, "findme.exe"), "x");
+        File.WriteAllText(Path.Combine(folder, "findme.png"), "x");
+
+        var provider = new FileSearchProvider();
+        using var index = new FileIndexService([downloads], provider, (_, _) => { });
+        await index.InitialScan.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(allowed.Length + 1, provider.Count);
+        Assert.Single(await provider.QueryAsync("scripts", default));
+        Assert.Empty(await provider.QueryAsync("findme.exe", default));
+        Assert.Empty(await provider.QueryAsync("findme.png", default));
+        foreach (string extension in allowed)
+            Assert.Single(await provider.QueryAsync("findme" + extension, default));
+    }
+
+    [Fact]
     public async Task MissingRootDoesNotBreakAvailableRoot()
     {
         using var area = new TempArea();
@@ -142,6 +167,18 @@ public sealed class FileSearchTests
         using var index = new FileIndexService([downloads, documents], provider,
             (_, _) => { }, () => updates.Writer.TryWrite(true));
         await index.InitialScan.WaitAsync(TimeSpan.FromSeconds(10));
+
+        string ignored = Path.Combine(downloads, "ignored.exe");
+        File.WriteAllText(ignored, "x");
+        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+            await updates.Reader.ReadAsync(timeout.Token);
+        Assert.Empty(await provider.QueryAsync("ignored", default));
+
+        string accepted = Path.ChangeExtension(ignored, ".PDF");
+        File.Move(ignored, accepted);
+        await UntilAsync(() => provider.QueryAsync("ignored", default).Result.Count == 1);
+        File.Move(accepted, ignored);
+        await UntilAsync(() => provider.QueryAsync("ignored", default).Result.Count == 0);
 
         string first = Path.Combine(downloads, "new.pdf");
         File.WriteAllText(first, "one");
