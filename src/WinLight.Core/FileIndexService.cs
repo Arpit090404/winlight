@@ -149,6 +149,7 @@ public sealed class FileIndexService : IDisposable
             FileAttributes attributes = File.GetAttributes(path);
             if ((attributes & FileAttributes.ReparsePoint) != 0) return;
             bool directory = (attributes & FileAttributes.Directory) != 0;
+            if (!directory && !IsSearchableFile(path)) return;
             FileEntry child = FileEntry.Child(name, parent!, directory);
             parent!.Children![name] = child;
             if (directory) ScanChildren(path, child, stop);
@@ -175,6 +176,7 @@ public sealed class FileIndexService : IDisposable
                         FileAttributes attributes = File.GetAttributes(path);
                         if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
                         bool directory = (attributes & FileAttributes.Directory) != 0;
+                        if (!directory && !IsSearchableFile(path)) continue;
                         string name = System.IO.Path.GetFileName(path);
                         FileEntry child = FileEntry.Child(name, parent, directory);
                         parent.Children![name] = child;
@@ -187,6 +189,21 @@ public sealed class FileIndexService : IDisposable
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or SecurityException)
             { _log($"Scan {current}", error); }
         }
+    }
+
+    private static bool IsSearchableFile(string path)
+    {
+        ReadOnlySpan<char> extension = Path.GetExtension(path.AsSpan());
+        return extension.Equals(".docx", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".xls", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".xlsb", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".md", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".ppt", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".pptx", StringComparison.OrdinalIgnoreCase);
     }
 
     private void PublishEntries()

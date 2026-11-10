@@ -170,3 +170,10 @@
 - Stopped the existing workspace WinLight process and republished the current working-tree source at HEAD to `publish/WinLight` in Release.
 - Confirmed the published `WinLight.App.pri` matches the build output by SHA-256; the published app started and remained resident in desktop session 1.
 - Alt+Space opened the bar. UI Automation read `12*8 = 96` as the first result and `pi = 3.14159265359` as the sole result for `=pi`; Esc dismissed the bar. No perf or broader tests were run by request.
+
+## 2026-11-10 — Document file search filter
+
+- File indexing now includes .docx, .pdf, .xls, .xlsx, .xlsm, .xlsb, .md, .txt, .ppt, and .pptx files; folders are still indexed regardless of name.
+- Initial scans and watcher updates use the same extension filter, including case-insensitive rename handling.
+- Added regression coverage for allowed files, skipped files, folders, and watcher renames. Release build succeeded with zero warnings; tests were not run by request.
+- Quick performance: snapshot hotkey p95 23.049 ms, query max 11.597 ms, and snapshot readiness 499.007 ms passed; idle CPU 0.286% exceeded its 0.1% gate. Cold full-scan readiness was informational at 1936.722 ms.
