@@ -1,5 +1,12 @@
 # Progress
 
+## 2026-11-11 — Launch handoff after resume (physical verification pending)
+- Traced result selection through `ResultActionExecutor` to `ShellExecuteEx`; the existing resume callback restores the hotkey but does not alter launch state. No launch failure entries were present in the local error log.
+- Added failure metadata with immediate native error capture, a closable process handle, default shell verb, and inline-only shell errors. Cached AppsFolder entries no longer fail solely because their resolved target is temporarily absent. The optimizer review led to retaining the existing initialized UI STA instead of a new uninitialized worker.
+- Focused snapshot tests passed (6/6), and the Release app build had zero warnings. Published desktop checks launched fresh Notepad (Win32) and Calculator (packaged) processes through Alt+Space, search, and Enter; their test processes were closed afterward. No retry, resume delay, timer, or index rebuild was added.
+- After one real sleep/wake transition, the user reported Notepad and Calculator opening, but Riot Client and T3 Code failing. The same two apps also failed when launched directly from Windows Start, outside WinLight. Riot's direct shortcut started RiotClientServices; its own log then recorded failed resource downloads and an attempted Vanguard dependency install that was cancelled. No matching Windows Application, TWinUI, or AppModel error appeared in the inspected interval.
+- The final published build, with diagnostics enabled, launched fresh Notepad and Calculator processes. A Riot attempt returned `ProcessCreated` and produced RiotClientServices without a visible window; a T3 Code attempt returned `ProcessCreated`, while its existing process IDs remained after a second. These results show successful shell requests but do not prove the apps presented windows. The sleep/resume issue is not verified fixed; next is app-specific diagnosis of their post-wake window/startup behavior.
+
 ## 2026-11-10 — Integrated launcher Settings
 - Hosted the existing hotkey, login startup, and app rescan controls inside the pre-created launcher below its search bar; the tray and hotkey-conflict routes now enter that view.
 - Added gear and `settings` query entry, Search return and Escape behavior, a General/Apps sidebar, and query/result preservation across view switches.

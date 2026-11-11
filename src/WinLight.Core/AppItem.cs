@@ -33,8 +33,9 @@ public sealed class AppItem
     public bool HasMissingSnapshotTarget()
     {
         if (!IsFromSnapshot) return false;
-        if (!string.IsNullOrWhiteSpace(TargetPath) && Path.IsPathFullyQualified(TargetPath) &&
-            !File.Exists(TargetPath) && !Directory.Exists(TargetPath)) return true;
+        // The AppsFolder shell identity can still activate an app when its
+        // resolved target is temporarily unavailable after resume.
+        if (Source == AppSource.AppsFolder) return false;
         return LaunchPath.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) &&
             !File.Exists(LaunchPath);
     }

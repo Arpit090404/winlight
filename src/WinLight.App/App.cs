@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Input;
 using H.NotifyIcon;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Security;
@@ -525,7 +526,16 @@ public sealed partial class App : Application
         catch (Exception error)
         {
             bool copying = result.Action is ResultAction.CopyText;
-            AppLog.Error($"{(copying ? "Copy" : "Launch")} {result.Title}", error);
+            if (result.Action is ResultAction.LaunchApp failedLaunch)
+            {
+                string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string target = failedLaunch.Item.LaunchPath.Replace(profile, "%USERPROFILE%",
+                    StringComparison.OrdinalIgnoreCase);
+                string method = failedLaunch.Item.Source == AppSource.AppsFolder ? "AppsFolder" : "StartMenuShortcut";
+                string code = error is Win32Exception native ? native.NativeErrorCode.ToString() : "n/a";
+                AppLog.Error($"Launch name={result.Title}; method={method}; target={target}; win32={code}", error);
+            }
+            else AppLog.Error($"{(copying ? "Copy" : "Open")} {result.Title}", error);
             if (_error is not null)
             {
                 _error.Text = copying
