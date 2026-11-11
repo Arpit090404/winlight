@@ -1,5 +1,11 @@
 # WinLight reliability decisions
 
+## Shell launch handoff
+
+- App, shortcut, and file launches continue through `ShellExecuteEx` on the existing WinUI STA thread, which has an initialized COM apartment and message loop. The default shell verb is used for normal launches; shell error dialogs are suppressed in favor of the inline error. No resume delay or automatic retry is used without a measured transient error.
+- The launcher requests a process handle when available, closes it immediately, and distinguishes that outcome from a shell-accepted activation with no process handle. This does not prove that an already-running or packaged app displayed its window.
+- A snapshot AppsFolder identity is passed to the shell even if its cached resolved target is temporarily unavailable; only a missing shortcut file is rejected before shell execution. Failed requests log the Win32 error, app name, activation path, and a profile-redacted target.
+
 ## Integrated launcher Settings
 
 - Settings uses the launcher's existing pre-created window and native Acrylic/DWM treatment. Search and Settings are content modes below the same search bar; the tray entry and hotkey-conflict fallback enter that mode rather than creating a second Settings window.

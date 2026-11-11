@@ -11,7 +11,8 @@ internal static class ResultActionExecutor
         switch (action)
         {
             case ResultAction.LaunchApp launch:
-                AppLauncher.Launch(launch.Item, asAdmin || launch.RunAsAdmin);
+                ShellLaunchOutcome appOutcome = AppLauncher.Launch(launch.Item, asAdmin || launch.RunAsAdmin);
+                if (DiagnosticLog.Enabled) DiagnosticLog.Write($"App shell outcome: {appOutcome}; name={launch.Item.Name}");
                 return;
             case ResultAction.OpenFile file:
                 AppLauncher.OpenFile(file.Path, file.IsDirectory, asAdmin);

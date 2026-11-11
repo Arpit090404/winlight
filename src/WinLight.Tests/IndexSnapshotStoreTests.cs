@@ -64,7 +64,7 @@ public sealed class IndexSnapshotStoreTests
     }
 
     [Fact]
-    public async Task CachedMissingTargetIsDetectedBeforeLaunch()
+    public async Task CachedAppsFolderIdentityDoesNotDependOnResolvedTarget()
     {
         string path = NewPath();
         string missingTarget = Path.Combine(Path.GetDirectoryName(path)!, "missing.exe");
@@ -75,11 +75,21 @@ public sealed class IndexSnapshotStoreTests
                     AppSource.AppsFolder, missingTarget)]);
 
             AppItem item = Assert.Single((await IndexSnapshotStore.LoadAsync(path))!);
-            Assert.True(item.HasMissingSnapshotTarget());
+            Assert.False(item.HasMissingSnapshotTarget());
             Assert.False(new AppItem(item.Name, item.LaunchPath, item.Identity,
                 item.Source, item.TargetPath).HasMissingSnapshotTarget());
         }
         finally { DeleteFolder(path); }
+    }
+
+    [Fact]
+    public void CachedMissingShortcutIsDetectedBeforeLaunch()
+    {
+        string missingShortcut = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".lnk");
+        var item = new AppItem("Removed shortcut", missingShortcut, "Removed",
+            AppSource.UserStartMenu, fromSnapshot: true);
+
+        Assert.True(item.HasMissingSnapshotTarget());
     }
 
     private static string NewPath() => Path.Combine(Path.GetTempPath(),
