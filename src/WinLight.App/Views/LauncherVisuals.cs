@@ -12,6 +12,9 @@ namespace WinLight.App;
 public sealed partial class App
 {
     private Storyboard? _resultsFade;
+    private Storyboard? _launcherFade;
+    private StackPanel? _launcherVisualRoot;
+    private UISettings? _motionSettings;
 
     partial void ConfigureVisuals(StackPanel root, TextBox input, ListView results,
         TextBlock error, LauncherViewModel viewModel, Action openSettings)
@@ -21,6 +24,8 @@ public sealed partial class App
             Source = new Uri("ms-appx:///Styles/LauncherResources.xaml")
         };
         root.Resources.MergedDictionaries.Add(resources);
+        _launcherVisualRoot = root;
+        _motionSettings = new UISettings();
 
         input.Style = (Style)resources["WinLightSearchBoxStyle"];
         Brush transparent = (Brush)resources["WinLightTransparentBrush"];
@@ -51,14 +56,18 @@ public sealed partial class App
         };
         searchBar.Children.Add(glyph);
         searchBar.Children.Add(input);
+        var gearRotation = new RotateTransform();
+        var gear = new FontIcon
+        {
+            Glyph = "\uE713",
+            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            FontSize = 18,
+            RenderTransform = gearRotation,
+            RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5)
+        };
         var settingsButton = new Button
         {
-            Content = new FontIcon
-            {
-                Glyph = "\uE713",
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
-                FontSize = 18
-            },
+            Content = gear,
             Width = 40,
             Height = 40,
             Padding = new Thickness(0),
@@ -72,6 +81,36 @@ public sealed partial class App
         AutomationProperties.SetName(settingsButton, "Open Settings");
         ToolTipService.SetToolTip(settingsButton, "Settings");
         settingsButton.Click += (_, _) => openSettings();
+        Storyboard? gearSpin = null;
+        settingsButton.PointerEntered += (_, _) => RotateGear(15);
+        settingsButton.PointerExited += (_, _) => RotateGear(0);
+        void RotateGear(double angle)
+        {
+            double from = gearRotation.Angle;
+            gearSpin?.Stop();
+            gearRotation.Angle = from;
+            if (_motionSettings?.AnimationsEnabled != true)
+            {
+                gearRotation.Angle = 0;
+                return;
+            }
+            var turn = new DoubleAnimation
+            {
+                From = from, To = angle,
+                Duration = new Duration(TimeSpan.FromMilliseconds(140)),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(turn, gearRotation);
+            Storyboard.SetTargetProperty(turn, nameof(RotateTransform.Angle));
+            var spin = new Storyboard();
+            spin.Children.Add(turn);
+            spin.Completed += (_, _) =>
+            {
+                if (ReferenceEquals(gearSpin, spin)) gearRotation.Angle = angle;
+            };
+            gearSpin = spin;
+            spin.Begin();
+        }
         searchBar.Children.Add(settingsButton);
 
         results.DisplayMemberPath = string.Empty;
@@ -97,7 +136,6 @@ public sealed partial class App
         root.Children.Add(results);
         root.Children.Add(error);
 
-        var uiSettings = new UISettings();
         viewModel.PropertyChanged += OnResultsVisibilityChanged;
 
         void OnResultsVisibilityChanged(object? sender, PropertyChangedEventArgs args)
@@ -106,7 +144,7 @@ public sealed partial class App
             divider.Visibility = viewModel.IsResultsVisible ? Visibility.Visible : Visibility.Collapsed;
             _resultsFade?.Stop();
             results.Opacity = 1;
-            if (!viewModel.IsResultsVisible || !uiSettings.AnimationsEnabled) return;
+            if (!viewModel.IsResultsVisible || _motionSettings?.AnimationsEnabled != true) return;
 
             results.Opacity = 0;
             results.DispatcherQueue.TryEnqueue(() =>
@@ -125,6 +163,48 @@ public sealed partial class App
                 _resultsFade.Begin();
             });
         }
+    }
+
+    private partial void StartShowMotion()
+    {
+        if (_launcherVisualRoot is null) return;
+        _launcherFade?.Stop();
+        if (_motionSettings?.AnimationsEnabled != true)
+        {
+            _launcherVisualRoot.Opacity = 1;
+            return;
+        }
+        _launcherFade = Fade(_launcherVisualRoot, 0, 1, 120);
+        _launcherFade.Begin();
+    }
+
+    private partial void StartHideMotion(Action complete)
+    {
+        if (_launcherVisualRoot is null || _motionSettings?.AnimationsEnabled != true)
+        {
+            complete();
+            return;
+        }
+        _launcherFade?.Stop();
+        _launcherFade = Fade(_launcherVisualRoot, _launcherVisualRoot.Opacity, 0, 120);
+        _launcherFade.Completed += (_, _) => complete();
+        _launcherFade.Begin();
+    }
+
+    private static Storyboard Fade(UIElement target, double from, double to, int milliseconds)
+    {
+        var fade = new DoubleAnimation
+        {
+            From = from,
+            To = to,
+            Duration = new Duration(TimeSpan.FromMilliseconds(milliseconds)),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        Storyboard.SetTarget(fade, target);
+        Storyboard.SetTargetProperty(fade, nameof(UIElement.Opacity));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(fade);
+        return storyboard;
     }
 
     private static void UpdateSelectionPills(ListView results)

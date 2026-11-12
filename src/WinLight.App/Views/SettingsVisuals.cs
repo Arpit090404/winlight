@@ -3,12 +3,14 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 
 namespace WinLight.App;
 
 public sealed partial class App
 {
     private ListView? _settingsCategories;
+    private Storyboard? _settingsFade;
 
     partial void ConfigureSettingsVisuals(StackPanel root, TextBox hotkeyCapture,
         ToggleSwitch startupToggle, Button rescanButton, TextBlock message,
@@ -19,6 +21,14 @@ public sealed partial class App
             Source = new Uri("ms-appx:///Styles/SettingsResources.xaml")
         };
         root.Resources.MergedDictionaries.Add(resources);
+        root.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) =>
+        {
+            _settingsFade?.Stop();
+            root.Opacity = 1;
+            if (root.Visibility != Visibility.Visible || _motionSettings?.AnimationsEnabled != true) return;
+            _settingsFade = Fade(root, 0, 1, 140);
+            _settingsFade.Begin();
+        });
         root.Padding = new Thickness(0);
         root.Children.Clear();
 

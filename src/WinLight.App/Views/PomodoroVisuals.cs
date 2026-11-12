@@ -2,8 +2,10 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using WinLight.App.ViewModels;
 using WinLight.Core;
+using Windows.UI.ViewManagement;
 
 namespace WinLight.App;
 
@@ -109,6 +111,33 @@ internal static class PomodoroVisuals
         content.Children.Add(settingsRow);
 
         var panel = new Grid { Height = ControlsHeight };
+        var slide = new TranslateTransform();
+        panel.RenderTransform = slide;
+        var motionSettings = new UISettings();
+        Storyboard? reveal = null;
+        int revealVersion = 0;
+        panel.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) =>
+        {
+            int version = ++revealVersion;
+            reveal?.Stop();
+            slide.Y = 0;
+            if (panel.Visibility != Visibility.Visible || !motionSettings.AnimationsEnabled) return;
+            panel.DispatcherQueue.TryEnqueue(() =>
+            {
+                if (version != revealVersion || panel.Visibility != Visibility.Visible) return;
+                var move = new DoubleAnimation
+                {
+                    From = -8, To = 0,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(160)),
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                Storyboard.SetTarget(move, slide);
+                Storyboard.SetTargetProperty(move, nameof(TranslateTransform.Y));
+                reveal = new Storyboard();
+                reveal.Children.Add(move);
+                reveal.Begin();
+            });
+        });
         panel.Children.Add(new ScrollViewer
         {
             Content = content,

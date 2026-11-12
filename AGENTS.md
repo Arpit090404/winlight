@@ -2,7 +2,7 @@
 
 A keyboard-first app launcher for Windows 11 (Windows 10 22H2 best-effort). Press a global hotkey, type a few letters, press Enter, and the app launches. It must be **instant, reliable, and indistinguishable from a first-party Windows surface**.
 
-Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `optimizer`. Read the "Ownership" section before editing anything.
+Agents available in this repo (`.codex/agents/`): `coder`, `designer`, `animator`, `optimizer`, `scripter`. Read the "Ownership" section before editing anything.
 
 ---
 
@@ -73,11 +73,14 @@ Only **one agent writes to a given area at a time.** Parallel work is allowed on
 | Agent | Sandbox | May edit | Must not edit |
 |---|---|---|---|
 | `coder` | write | `WinLight.Core`, `ViewModels/`, `Native/`, tests, benchmarks, project files, `docs/PROGRESS.md` | Visual styling, XAML layout/templates |
-| `designer` | write | `Views/`, `Styles/`, `Assets/` only | Search, indexing, launching, hotkey, interop logic |
+| `designer` | write | `Views/`, `Styles/`, `Assets/` for layout, visual design, and accessibility | Search, indexing, launching, hotkey, interop logic |
+| `animator` | write | Motion behavior, transitions, and motion resources in relevant `Views/` and `Styles/` files, after designer handoff | Core, ViewModels, Native, search, indexing, application logic, and concurrent edits to designer-owned files |
 | `optimizer` | **read-only** | Nothing | Everything. Reports findings; `coder` applies fixes |
 | `scripter` | write | scripts/, tools/, scripts/budgets.json, docs/PERF.md | src/|
 
-Handoff order: `coder` builds a working skeleton → `coder` adds features → `designer` and `optimizer` run in parallel → `coder` applies the optimizer's fixes and any designer-requested hooks → re-measure.
+Handoff order: `coder` builds a working skeleton → `coder` adds features → `designer` establishes layout while `optimizer` may review → `animator` adds needed motion after the designer releases the affected files → `designer` reviews visual consistency if needed → `coder` applies optimizer fixes and requested hooks → re-measure. Never let designer and animator write the same file simultaneously.
+
+Route to `animator` when the user requests motion, a feature needs interaction animation, an interaction feels abrupt, a view needs an entrance or exit transition, or hover, pressed, selection, or state feedback needs refinement. Do not invoke it for every UI change; keep static UI when motion adds no useful feedback. Use `designer` first for new layout or visual structure.
 
 After each phase, append 3–5 lines to `docs/PROGRESS.md`: what changed, what was measured, what is next.
 
@@ -106,7 +109,7 @@ Measure, do not guess. Use BenchmarkDotNet for matching/ranking, `dotnet-counter
 
 ---
 
-## 7. Design rules (the designer enforces these)
+## 7. Design rules (the designer enforces visual design; the animator enforces motion)
 
 Goal: it should look like it shipped with Windows 11.
 

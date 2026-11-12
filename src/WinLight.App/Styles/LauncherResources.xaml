@@ -5,6 +5,7 @@
     <SolidColorBrush x:Key="WinLightTransparentBrush" Color="Transparent" />
 
     <Style x:Key="WinLightSearchBoxStyle" TargetType="TextBox">
+        <Setter Property="UseSystemFocusVisuals" Value="False" />
         <Setter Property="Height" Value="56" />
         <Setter Property="MinHeight" Value="56" />
         <Setter Property="FontSize" Value="20" />

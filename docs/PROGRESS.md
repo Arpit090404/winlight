@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-11-12 — Search, gear, and Focus motion follow-up
+- Removed the search field's visible programmatic focus rectangle and glyph fade while retaining immediate keyboard input after the hotkey.
+- Added a 15-degree, 140 ms gear hover rotation and an 8 px, 160 ms embedded Focus reveal; the latter runs only when a matching query first shows the panel.
+- Both effects honor the Windows animation preference, and rapid Focus visibility changes cancel stale reveals. No search, timer, or indexing logic changed.
+- Release publish completed with zero warnings (`NuGetAudit=false`); the interactive app showed the clean search bar, gear hover state, and embedded Focus panel for `pom`. Full tests and performance benchmarks were not run for this visual-only change.
+
+## 2026-11-12 — Subtle launcher motion
+- Added a 120 ms show/dismiss fade, a 140 ms Settings entrance fade, and search focus feedback; native result and control states remain in use, with no per-query animation.
+- A narrow lifecycle hook cancels a pending hide when the launcher reopens; system animation and High Contrast settings keep content immediately legible.
+- Release publish completed with zero warnings (`NuGetAudit=false` because the audit service was unreachable). The published app opened, accepted rapid queries, and navigated both Settings categories through UI Automation.
+- Scripted Escape and keyboard navigation were inconclusive; light/dark switching and reduced-motion behavior were not physically toggled. Next: check those interactions manually on the desktop.
+
+## 2026-11-12 — Animator agent configuration
+- Added a project-scoped animator role for purposeful WinUI 3 motion, with Windows animation preference, focus, high-contrast, and hot-path constraints.
+- Narrowed the designer role's motion wording and documented sequential designer-to-animator ownership and routing; existing app code and UI files were untouched.
+- Codex strict configuration loaded successfully. Release build passed with zero warnings; verification reported 173 passing tests and one existing file-search assertion failure (`findme.xls` also matches related extensions).
+- Next: use animator only for a requested motion pass after the designer has established and released the affected view files.
+
 ## 2026-11-11 — Launch handoff after resume (physical verification pending)
 - Traced result selection through `ResultActionExecutor` to `ShellExecuteEx`; the existing resume callback restores the hotkey but does not alter launch state. No launch failure entries were present in the local error log.
 - Added failure metadata with immediate native error capture, a closable process handle, default shell verb, and inline-only shell errors. Cached AppsFolder entries no longer fail solely because their resolved target is temporarily absent. The optimizer review led to retaining the existing initialized UI STA instead of a new uninitialized worker.

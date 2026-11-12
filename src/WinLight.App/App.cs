@@ -57,11 +57,14 @@ public sealed partial class App : Application
     private const int SettingsHeight = 416;
     private long _pendingHotkeyFrame;
     private int _hideCount;
+    private int _visibilityVersion;
     private long _resultQueryId;
     private const int SectionHeaderHeight = 28;
 
     partial void ConfigureVisuals(StackPanel root, TextBox input, ListView results,
         TextBlock error, LauncherViewModel viewModel, Action openSettings);
+    private partial void StartShowMotion();
+    private partial void StartHideMotion(Action complete);
 
     public App()
     {
@@ -442,13 +445,14 @@ public sealed partial class App : Application
 
     private void Toggle()
     {
-        if (_window?.AppWindow.IsVisible == true) Hide();
+        if (_showing) Hide();
         else Show();
     }
 
     private void Show()
     {
         if (_window is null) return;
+        ++_visibilityVersion;
         if (_navigation.IsSettingsOpen) ReturnToSearch(restoreQuery: false, focusSearch: false);
         if (_hasIndex && DateTimeOffset.UtcNow - _lastIndexed >= TimeSpan.FromMinutes(15))
         {
@@ -472,6 +476,7 @@ public sealed partial class App : Application
         OverlayWindow.Place(_window, _logicalHeight);
         _window.AppWindow.Show();
         OverlayWindow.RestoreBackdrop(_window);
+        StartShowMotion();
         if (PerfLog.Enabled) PerfLog.Point("window_show", $"visible={_window.AppWindow.IsVisible}");
         OverlayWindow.BringToForeground(_window);
         PostUi(() =>
@@ -488,8 +493,10 @@ public sealed partial class App : Application
 
     private void Hide()
     {
+        if (!_showing) return;
         if (PerfLog.Enabled) PerfLog.Point("window_hide", $"visible_before={_window?.AppWindow.IsVisible}");
         _showing = false;
+        int version = ++_visibilityVersion;
         if (_navigation.IsSettingsOpen) ReturnToSearch(restoreQuery: false, focusSearch: false);
         if (PerfLog.Enabled && ++_hideCount % 500 == 0)
         {
@@ -503,7 +510,11 @@ public sealed partial class App : Application
             _pendingHotkeyFrame = 0;
             CompositionTarget.Rendering -= OnFirstRenderedFrame;
         }
-        _window?.AppWindow.Hide();
+        StartHideMotion(() =>
+        {
+            if (version == _visibilityVersion && !_showing)
+                _window?.AppWindow.Hide();
+        });
         SyncPomodoroDisplayTimer();
     }
 
